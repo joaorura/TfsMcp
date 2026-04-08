@@ -1,4 +1,5 @@
 from pathlib import Path
+import types
 
 from tfsmcp.runtime import build_runtime
 
@@ -65,8 +66,9 @@ def test_build_runtime_wires_dependencies(tmp_path, monkeypatch):
     assert callable(runtime.sessions["actions"].create_workspace)
     assert captured["scripts_dir"] == tmp_path / "scripts"
     assert callable(captured["run_script"])
+    monkeypatch.setattr("tfsmcp.runtime.subprocess.run", lambda command, check, creationflags: types.SimpleNamespace(returncode=0))
     assert captured["run_script"](tmp_path / "scripts" / "recover.ps1") == 0
-    assert captured["run_script"].__name__ == "<lambda>"
+    assert captured["run_script"].__name__ == "run_recovery_script"
 
 
 def test_build_runtime_uses_locator_when_tf_path_is_unset(tmp_path, monkeypatch):

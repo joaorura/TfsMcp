@@ -6,7 +6,16 @@ class TfOutputClassifier:
         text = f"{result.stdout}\n{result.stderr}".lower()
         if result.exit_code == 0:
             return "success"
-        if "unauthorized" in text or "access is denied" in text or "not authorized" in text:
+        unauthorized_tokens = [
+            "unauthorized",
+            "access is denied",
+            "not authorized",
+            "nao autorizado",
+            "não autorizado",
+            "acesso negado",
+            "tf30063",
+        ]
+        if any(token in text for token in unauthorized_tokens):
             return "unauthorized"
         if "workspace" in text:
             return "workspace_error"

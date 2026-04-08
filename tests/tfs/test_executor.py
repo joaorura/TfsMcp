@@ -35,6 +35,20 @@ def test_classifier_marks_unauthorized_result():
     assert classifier.classify(result) == "unauthorized"
 
 
+def test_classifier_marks_tf30063_as_unauthorized():
+    classifier = TfOutputClassifier()
+    result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063: You are not authorized", category="raw")
+
+    assert classifier.classify(result) == "unauthorized"
+
+
+def test_classifier_marks_portuguese_access_denied_as_unauthorized():
+    classifier = TfOutputClassifier()
+    result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Acesso negado para a coleção", category="raw")
+
+    assert classifier.classify(result) == "unauthorized"
+
+
 def test_executor_does_not_retry_non_unauthorized_failures(tmp_path):
     runner = SequenceRunner(
         [
@@ -146,3 +160,28 @@ def test_executor_uses_retry_budget_until_success(tmp_path):
     assert result.recovery_scripts == ["01-login.ps1"]
     assert executed == ["01-login.ps1", "01-login.ps1"]
     assert runner.calls == 3
+
+
+def test_executor_retries_unknown_failure_exit_100(tmp_path):
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "01-login.ps1").write_text("Write-Host auth", encoding="utf-8")
+
+    executed = []
+    recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
+    runner = SequenceRunner(
+        [
+            CommandResult(command=["tf", "checkout"], exit_code=100, stdout="", stderr="", category="raw"),
+            CommandResult(command=["tf", "checkout"], exit_code=0, stdout="ok", stderr="", category="raw"),
+        ]
+    )
+    executor = RetryingTfsExecutor(runner, TfOutputClassifier(), recovery, max_retries=1)
+
+    result = executor.run(["checkout", "D:/TFS/SPF/file.cs"])
+
+    assert result.exit_code == 0
+    assert result.category == "success"
+    assert result.recovery_triggered is True
+    assert result.retried is True
+    assert result.recovery_scripts == ["01-login.ps1"]
+    assert executed == ["01-login.ps1"]

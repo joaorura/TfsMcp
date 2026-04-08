@@ -15,7 +15,7 @@ class RetryingTfsExecutor:
         result.category = self._classifier.classify(result)
 
         retries_remaining = self._max_retries
-        while result.category == "unauthorized" and retries_remaining > 0:
+        while self._should_try_recovery(result) and retries_remaining > 0:
             recovery = self._recovery_manager.run_scripts()
             result.recovery_triggered = True
             result.recovery_scripts = recovery.scripts
@@ -30,3 +30,14 @@ class RetryingTfsExecutor:
             retries_remaining -= 1
 
         return result
+
+    @staticmethod
+    def _should_try_recovery(result: CommandResult) -> bool:
+        if result.category == "unauthorized":
+            return True
+
+        # Some TFVC auth failures in console-less/background runs return 100 without stderr/stdout.
+        if result.category == "unknown_failure" and result.exit_code == 100:
+            return True
+
+        return False

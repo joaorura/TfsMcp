@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import dataclass
 from pathlib import PureWindowsPath
 
@@ -59,12 +60,25 @@ class Runtime:
     sessions: object
 
 
+def run_recovery_script(script_path) -> int:
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+    ]
+    creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    return subprocess.run(command, check=False, creationflags=creationflags).returncode
+
+
 def build_runtime() -> Runtime:
     config = load_config()
     tf_path = config.tf_path or TfExeLocator().locate()
     runner = TfCommandRunner(tf_path, timeout_seconds=config.command_timeout_seconds)
     classifier = TfOutputClassifier()
-    recovery = UnauthorizedRecoveryManager(config.tfs_scripts_path, lambda script: 0)
+    recovery = UnauthorizedRecoveryManager(config.tfs_scripts_path, run_recovery_script)
     executor = RetryingTfsExecutor(runner, classifier, recovery, max_retries=config.max_unauthorized_retries)
     detector = TfsProjectDetector(executor)
     onboarding = TfsProjectOnboardingAdvisor(detector)

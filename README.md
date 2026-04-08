@@ -8,6 +8,54 @@ Local TFS MCP service for Windows development machines.
 pip install -e .[dev]
 ```
 
+## PowerShell setup (Conda)
+
+Default scripts are in `scripts/` and use the Conda env `mcp_tfs_env`.
+
+Create/update env and install all dependencies:
+
+```powershell
+.\scripts\Install-TfsMcp.ps1
+```
+
+Create/update env, install dependencies, install service and start it:
+
+```powershell
+.\scripts\Install-TfsMcp.ps1 -InstallWindowsService -StartWindowsService
+```
+
+Run MCP in console/script mode:
+
+```powershell
+.\scripts\Manage-TfsMcp.ps1 -Command run
+```
+
+Manage Windows service:
+
+```powershell
+.\scripts\Manage-TfsMcp.ps1 -Command service-install
+.\scripts\Manage-TfsMcp.ps1 -Command service-start
+.\scripts\Manage-TfsMcp.ps1 -Command service-status
+.\scripts\Manage-TfsMcp.ps1 -Command service-stop
+.\scripts\Manage-TfsMcp.ps1 -Command service-uninstall
+```
+
+Run in user background mode (no Windows service):
+
+```powershell
+.\scripts\Manage-TfsMcp.ps1 -Command background-start
+.\scripts\Manage-TfsMcp.ps1 -Command background-status
+.\scripts\Manage-TfsMcp.ps1 -Command background-stop
+```
+
+Enable auto-start at user logon (Startup folder shortcut):
+
+```powershell
+.\scripts\Manage-TfsMcp.ps1 -Command startup-enable
+.\scripts\Manage-TfsMcp.ps1 -Command startup-status
+.\scripts\Manage-TfsMcp.ps1 -Command startup-disable
+```
+
 ## Run tests
 
 ```bash

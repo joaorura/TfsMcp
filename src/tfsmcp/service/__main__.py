@@ -9,8 +9,15 @@ from tfsmcp.service.windows_service import TfsMcpWindowsService
 def main(argv: list[str] | None = None) -> int:
     argv = argv or sys.argv[1:]
     installer = ServiceInstaller(default_runner, "TfsMcpService", "TFS MCP Service")
+    if argv == []:
+        import servicemanager
+
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(TfsMcpWindowsService)
+        servicemanager.StartServiceCtrlDispatcher()
+        return 0
     if argv == ["install"]:
-        return installer.install(sys.executable, "-m tfsmcp.service run")
+        return installer.install(sys.executable, "-m tfsmcp.service")
     if argv == ["uninstall"]:
         return installer.uninstall()
     if argv == ["start"]:
@@ -22,7 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     if argv == ["status"]:
         return installer.status()
     if argv == ["run"]:
-        win32serviceutil.HandleCommandLine(TfsMcpWindowsService)
+        import servicemanager
+
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(TfsMcpWindowsService)
+        servicemanager.StartServiceCtrlDispatcher()
         return 0
     raise SystemExit("usage: python -m tfsmcp.service [install|uninstall|start|stop|restart|status|run]")
 

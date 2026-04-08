@@ -6,6 +6,9 @@ import types
 def install_pywin32_stubs(monkeypatch):
     servicemanager = types.ModuleType("servicemanager")
     servicemanager.LogInfoMsg = lambda message: None
+    servicemanager.Initialize = lambda: None
+    servicemanager.PrepareToHostSingle = lambda service_cls: None
+    servicemanager.StartServiceCtrlDispatcher = lambda: None
 
     win32event = types.ModuleType("win32event")
     win32event.CreateEvent = lambda *args, **kwargs: object()
@@ -82,19 +85,35 @@ def test_service_main_dispatches_install(monkeypatch):
     code = service_main.main(["install"])
 
     assert code == 0
-    assert fake.calls == [("install", sys.executable, "-m tfsmcp.service run")]
+    assert fake.calls == [("install", sys.executable, "-m tfsmcp.service")]
 
 
 def test_service_main_dispatches_run_via_win32serviceutil(monkeypatch):
     service_main = load_service_main_module(monkeypatch)
     calls = []
 
-    def fake_handle_command_line(service_cls):
-        calls.append(service_cls)
+    monkeypatch.setattr(service_main, "servicemanager", None, raising=False)
 
-    monkeypatch.setattr(service_main.win32serviceutil, "HandleCommandLine", fake_handle_command_line)
+    class FakeServiceManager:
+        @staticmethod
+        def Initialize():
+            calls.append("Initialize")
+
+        @staticmethod
+        def PrepareToHostSingle(service_cls):
+            calls.append(("PrepareToHostSingle", service_cls))
+
+        @staticmethod
+        def StartServiceCtrlDispatcher():
+            calls.append("StartServiceCtrlDispatcher")
+
+    monkeypatch.setitem(sys.modules, "servicemanager", FakeServiceManager)
 
     code = service_main.main(["run"])
 
     assert code == 0
-    assert calls == [service_main.TfsMcpWindowsService]
+    assert calls == [
+        "Initialize",
+        ("PrepareToHostSingle", service_main.TfsMcpWindowsService),
+        "StartServiceCtrlDispatcher",
+    ]

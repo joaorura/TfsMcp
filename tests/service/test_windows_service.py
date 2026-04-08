@@ -27,6 +27,8 @@ def install_pywin32_stubs(monkeypatch):
 
     win32service = types.ModuleType("win32service")
     win32service.SERVICE_STOP_PENDING = 3
+    win32service.SERVICE_START_PENDING = 2
+    win32service.SERVICE_RUNNING = 4
 
     class ServiceFramework:
         def __init__(self, args):
@@ -78,13 +80,13 @@ def test_windows_service_runs_http_server(monkeypatch):
     windows_service = load_windows_service_module(monkeypatch)
     service = object.__new__(windows_service.TfsMcpWindowsService)
     service.server = None
-    service.ReportServiceStatus = lambda status: None
+    service.ReportServiceStatus = lambda status, **kwargs: None
     service.stop_event = object()
     fake_server = FakeServer()
 
     monkeypatch.setattr(windows_service.servicemanager, "LogInfoMsg", lambda msg: None)
     monkeypatch.setattr(windows_service, "build_runtime", lambda: object())
-    monkeypatch.setattr(windows_service, "start_http_server", lambda runtime: fake_server)
+    monkeypatch.setattr(windows_service, "start_http_server_for_service", lambda runtime: fake_server)
 
     service.SvcDoRun()
 
