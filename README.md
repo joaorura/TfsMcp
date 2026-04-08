@@ -56,6 +56,18 @@ Enable auto-start at user logon (Startup folder shortcut):
 .\scripts\Manage-TfsMcp.ps1 -Command startup-disable
 ```
 
+One-shot setup for Conda + Startup shortcut:
+
+```powershell
+.\scripts\Setup-TfsMcpStartup.ps1
+```
+
+One-shot setup and start MCP in background now:
+
+```powershell
+.\scripts\Setup-TfsMcpStartup.ps1 -StartBackgroundNow
+```
+
 ## Run tests
 
 ```bash
