@@ -145,6 +145,8 @@ Current limitations of simulated worktree mode:
 MCP transport:
 - Streamable HTTP endpoint: `http://127.0.0.1:39393/mcp`
 
+This service is MCP-only now. Legacy REST endpoints (`/health`, `/checkout`, `/sessions`, etc.) are intentionally not exposed.
+
 MCP tools:
 - `tfs_session_create(name, source_path, session_path)` creates a TFS-backed session workspace and stores an active session record.
 - `tfs_session_list()` returns the stored session records.
@@ -152,14 +154,6 @@ MCP tools:
 - `tfs_session_discard(name)` discards a session and deletes its workspace.
 - `tfs_session_resume(name)` restores an existing session to active state.
 - `tfs_session_promote(name, comment)` records a promoted state and stores the promote/checkpoint result.
-
-HTTP endpoints:
-- `POST /sessions`
-- `GET /sessions`
-- `POST /sessions/{name}/suspend`
-- `DELETE /sessions/{name}`
-- `POST /sessions/{name}/resume`
-- `POST /sessions/{name}/promote`
 
 Current real-workspace behavior:
 - session creation runs `tf workspace /new`

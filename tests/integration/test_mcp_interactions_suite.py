@@ -1,9 +1,7 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from tfsmcp.contracts import CommandResult
-from tfsmcp.http_app import build_http_app
+from tfsmcp.mcp_server import build_tool_handlers
 from tfsmcp.runtime import Runtime, RuntimeSessionActions
 from tfsmcp.sessions.manager import SessionManager
 from tfsmcp.sessions.store import SessionStore
@@ -104,52 +102,42 @@ def build_runtime_with_simulated_tfs(tmp_path: Path):
         executor=executor,
         sessions=sessions,
     )
-    client = TestClient(build_http_app(runtime))
-    return client, runner, executed_scripts
+    handlers = build_tool_handlers(runtime)
+    return handlers, runner, executed_scripts
 
 
-def test_http_checkout_triggers_recovery_and_retry_once(tmp_path):
-    client, runner, executed_scripts = build_runtime_with_simulated_tfs(tmp_path)
+def test_checkout_tool_triggers_recovery_and_retry_once(tmp_path):
+    handlers, runner, executed_scripts = build_runtime_with_simulated_tfs(tmp_path)
 
-    response = client.post("/checkout", json={"path": "D:/TFS/SPF/develop/Historico/Changelog.txt"})
+    payload = handlers["tfs_checkout"]("D:/TFS/SPF/develop/Historico/Changelog.txt")
 
-    assert response.status_code == 200
-    payload = response.json()["data"]
-    assert payload["exit_code"] == 0
-    assert payload["category"] == "success"
-    assert payload["recovery_triggered"] is True
-    assert payload["retried"] is True
-    assert payload["recovery_scripts"] == ["01-auth.ps1", "02-context.ps1"]
+    assert payload.exit_code == 0
+    assert payload.category == "success"
+    assert payload.recovery_triggered is True
+    assert payload.retried is True
+    assert payload.recovery_scripts == ["01-auth.ps1", "02-context.ps1"]
     assert executed_scripts == ["01-auth.ps1", "02-context.ps1"]
     assert runner.checkout_calls == 2
 
 
-def test_http_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
-    client, runner, _ = build_runtime_with_simulated_tfs(tmp_path)
+def test_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
+    handlers, runner, _ = build_runtime_with_simulated_tfs(tmp_path)
     session_path = tmp_path / "agent-auth"
 
-    created = client.post(
-        "/sessions",
-        json={
-            "name": "agent-auth",
-            "source_path": "$/SPF/Main",
-            "session_path": str(session_path),
-        },
-    )
-    suspended = client.post("/sessions/agent-auth/suspend")
-    resumed = client.post("/sessions/agent-auth/resume")
-    promoted = client.post("/sessions/agent-auth/promote", json={"comment": "ship it"})
-    discarded = client.delete("/sessions/agent-auth")
-    listed = client.get("/sessions")
+    created = handlers["tfs_session_create"]("agent-auth", "$/SPF/Main", str(session_path))
+    suspended = handlers["tfs_session_suspend"]("agent-auth")
+    resumed = handlers["tfs_session_resume"]("agent-auth")
+    promoted = handlers["tfs_session_promote"]("agent-auth", "ship it")
+    discarded = handlers["tfs_session_discard"]("agent-auth")
+    listed = handlers["tfs_session_list"]()
 
-    assert created.status_code == 200
-    assert created.json()["data"]["status"] == "active"
-    assert suspended.json()["data"]["status"] == "suspended"
-    assert resumed.json()["data"]["status"] == "active"
-    assert promoted.json()["data"]["status"] == "promoted"
-    assert promoted.json()["data"]["last_shelveset"] == "ship it"
-    assert discarded.json()["data"]["status"] == "discarded"
-    assert listed.json()["data"][0]["status"] == "discarded"
+    assert created.status == "active"
+    assert suspended.status == "suspended"
+    assert resumed.status == "active"
+    assert promoted.status == "promoted"
+    assert promoted.last_shelveset == "ship it"
+    assert discarded.status == "discarded"
+    assert listed[0].status == "discarded"
 
     assert runner.commands == [
         ["workspace", "/new", "agent-auth"],

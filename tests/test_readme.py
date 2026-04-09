@@ -20,9 +20,7 @@ def test_readme_mentions_session_lifecycle_surface():
     assert "tfs_session_list" in readme
     assert "tfs_session_suspend" in readme
     assert "tfs_session_discard" in readme
-    assert "POST /sessions" in readme
-    assert "POST /sessions/{name}/suspend" in readme
-    assert "DELETE /sessions/{name}" in readme
+    assert "http://127.0.0.1:39393/mcp" in readme
 
 
 def test_readme_mentions_real_workspace_session_surface():
@@ -30,8 +28,6 @@ def test_readme_mentions_real_workspace_session_surface():
 
     assert "tfs_session_resume" in readme
     assert "tfs_session_promote" in readme
-    assert "POST /sessions/{name}/resume" in readme
-    assert "POST /sessions/{name}/promote" in readme
     assert "tf workspace /new" in readme
     assert "tf workfold /map" in readme
     assert "tf get" in readme
