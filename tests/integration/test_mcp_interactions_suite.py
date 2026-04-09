@@ -140,11 +140,11 @@ def test_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
     assert listed[0].status == "discarded"
 
     assert runner.commands == [
-        ["workspace", "/new", "agent-auth"],
-        ["workfold", "/map", "$/SPF/Main", str(session_path), "/workspace:agent-auth"],
-        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth"],
-        ["shelve", "agent-auth"],
-        ["get", str(session_path), "/recursive", "/workspace:agent-auth"],
-        ["checkin", "/comment:ship it", "/workspace:agent-auth"],
-        ["workspace", "/delete", "agent-auth"],
+        ["workspace", "/new", "agent-auth", "/noprompt"],
+        ["workfold", "/map", "$/SPF/Main", str(session_path), "/workspace:agent-auth", "/noprompt"],
+        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["shelve", "agent-auth", "/noprompt"],
+        ["get", str(session_path), "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
+        ["workspace", "/delete", "agent-auth", "/noprompt"],
     ]

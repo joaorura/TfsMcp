@@ -39,24 +39,24 @@ class RuntimeSessionActions:
                 if part and not part.endswith(":\\")
             )
         )
-        self._run_or_raise(["workspace", "/new", name])
-        self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}"])
-        self._run_or_raise(["get", server_path, "/recursive", f"/workspace:{name}"])
+        self._run_or_raise(["workspace", "/new", name, "/noprompt"])
+        self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
+        self._run_or_raise(["get", server_path, "/recursive", f"/workspace:{name}", "/noprompt"])
         return server_path
 
     def create_shelveset(self, workspace_name: str) -> str:
-        self._run_or_raise(["shelve", workspace_name])
+        self._run_or_raise(["shelve", workspace_name, "/noprompt"])
         return workspace_name
 
     def remove_workspace(self, workspace_name: str) -> None:
-        self._run_or_raise(["workspace", "/delete", workspace_name])
+        self._run_or_raise(["workspace", "/delete", workspace_name, "/noprompt"])
 
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
-        self._run_or_raise(["get", session_path, "/recursive", f"/workspace:{workspace_name}"])
+        self._run_or_raise(["get", session_path, "/recursive", f"/workspace:{workspace_name}", "/noprompt"])
 
     def promote_workspace(self, workspace_name: str, comment: str | None) -> str:
         final_comment = comment or workspace_name
-        self._run_or_raise(["checkin", f"/comment:{final_comment}", f"/workspace:{workspace_name}"])
+        self._run_or_raise(["checkin", f"/comment:{final_comment}", f"/workspace:{workspace_name}", "/noprompt"])
         return final_comment
 
 

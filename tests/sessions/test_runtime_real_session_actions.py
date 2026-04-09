@@ -7,7 +7,12 @@ class FakeExecutor:
 
     def run(self, args):
         self.commands.append(args)
-        return {"command": args, "stdout": "ok", "stderr": "", "exit_code": 0}
+        class Result:
+            exit_code = 0
+            stdout = "ok"
+            stderr = ""
+
+        return Result()
 
 
 def test_runtime_session_actions_creates_real_workspace_mapping_and_get(tmp_path):
@@ -18,9 +23,9 @@ def test_runtime_session_actions_creates_real_workspace_mapping_and_get(tmp_path
 
     assert server_path == "$/SPF/Main"
     assert executor.commands == [
-        ["workspace", "/new", "agent-auth"],
-        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth"],
-        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth"],
+        ["workspace", "/new", "agent-auth", "/noprompt"],
+        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],
+        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth", "/noprompt"],
     ]
 
 
@@ -32,7 +37,7 @@ def test_runtime_session_actions_resume_restores_workspace_contents(tmp_path):
     actions.resume_workspace("agent-auth", str(tmp_path / "agent-auth"))
 
     assert executor.commands == [
-        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth"],
+        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth", "/noprompt"],
     ]
 
 
@@ -45,7 +50,7 @@ def test_runtime_session_actions_promote_uses_checkin_comment_and_workspace_fall
 
     assert promoted == "agent-auth"
     assert executor.commands == [
-        ["checkin", "/comment:agent-auth", "/workspace:agent-auth"],
+        ["checkin", "/comment:agent-auth", "/workspace:agent-auth", "/noprompt"],
     ]
 
 
@@ -58,7 +63,7 @@ def test_runtime_session_actions_promote_uses_supplied_comment():
 
     assert promoted == "ship it"
     assert executor.commands == [
-        ["checkin", "/comment:ship it", "/workspace:agent-auth"],
+        ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
     ]
 
 
@@ -71,6 +76,6 @@ def test_runtime_session_actions_resume_and_promote_methods_exist(tmp_path):
     actions.promote_workspace("agent-auth", "ship it")
 
     assert executor.commands == [
-        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth"],
-        ["checkin", "/comment:ship it", "/workspace:agent-auth"],
+        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
     ]

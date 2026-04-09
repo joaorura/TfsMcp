@@ -14,8 +14,9 @@ class RetryingTfsExecutor:
         result = self._runner.run(args)
         result.category = self._classifier.classify(result)
 
-        retries_remaining = self._max_retries
-        while self._should_try_recovery(result) and retries_remaining > 0:
+        # Fallback policy: at most one recovery cycle per operation.
+        retries_remaining = 1 if self._max_retries > 0 else 0
+        while self._should_try_recovery(args, result) and retries_remaining > 0:
             recovery = self._recovery_manager.run_scripts()
             result.recovery_triggered = True
             result.recovery_scripts = recovery.scripts
@@ -32,12 +33,16 @@ class RetryingTfsExecutor:
         return result
 
     @staticmethod
-    def _should_try_recovery(result: CommandResult) -> bool:
+    def _should_try_recovery(args: Sequence[str], result: CommandResult) -> bool:
         if result.category == "unauthorized":
             return True
 
         # Some TFVC auth failures in console-less/background runs return 100 without stderr/stdout.
         if result.category == "unknown_failure" and result.exit_code == 100:
-            return True
+            command = (args[0] if args else "").lower()
+            if command == "workfold":
+                # Detection calls use plain `workfold <path>` and should not trigger auth scripts.
+                return len(args) > 1 and str(args[1]).lower() == "/map"
+            return command in {"checkout", "undo", "checkin", "shelve", "workspace", "get"}
 
         return False

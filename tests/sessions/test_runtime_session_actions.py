@@ -49,11 +49,11 @@ def test_runtime_session_actions_uses_executor_for_create_suspend_discard(tmp_pa
     assert server_path == "$/SPF/Main"
     assert shelveset == "agent-auth"
     assert executor.commands == [
-        ["workspace", "/new", "agent-auth"],
-        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth"],
-        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth"],
-        ["shelve", "agent-auth"],
-        ["workspace", "/delete", "agent-auth"],
+        ["workspace", "/new", "agent-auth", "/noprompt"],
+        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],
+        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["shelve", "agent-auth", "/noprompt"],
+        ["workspace", "/delete", "agent-auth", "/noprompt"],
     ]
 
 

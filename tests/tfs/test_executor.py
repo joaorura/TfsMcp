@@ -135,7 +135,7 @@ def test_executor_does_not_retry_when_recovery_script_fails(tmp_path):
     assert runner.calls == 1
 
 
-def test_executor_uses_retry_budget_until_success(tmp_path):
+def test_executor_retries_only_once_even_with_higher_budget(tmp_path):
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
     (scripts_dir / "01-login.ps1").write_text("Write-Host one", encoding="utf-8")
@@ -153,13 +153,13 @@ def test_executor_uses_retry_budget_until_success(tmp_path):
 
     result = executor.run(["checkout", "D:/TFS/SPF/file.cs"])
 
-    assert result.exit_code == 0
-    assert result.category == "success"
+    assert result.exit_code == 1
+    assert result.category == "unauthorized"
     assert result.recovery_triggered is True
     assert result.retried is True
     assert result.recovery_scripts == ["01-login.ps1"]
-    assert executed == ["01-login.ps1", "01-login.ps1"]
-    assert runner.calls == 3
+    assert executed == ["01-login.ps1"]
+    assert runner.calls == 2
 
 
 def test_executor_retries_unknown_failure_exit_100(tmp_path):
@@ -185,3 +185,28 @@ def test_executor_retries_unknown_failure_exit_100(tmp_path):
     assert result.retried is True
     assert result.recovery_scripts == ["01-login.ps1"]
     assert executed == ["01-login.ps1"]
+
+
+def test_executor_does_not_recover_unknown_100_for_workfold_detection(tmp_path):
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "01-login.ps1").write_text("Write-Host auth", encoding="utf-8")
+
+    executed = []
+    recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
+    runner = SequenceRunner(
+        [
+            CommandResult(command=["tf", "workfold"], exit_code=100, stdout="", stderr="", category="raw"),
+        ]
+    )
+    executor = RetryingTfsExecutor(runner, TfOutputClassifier(), recovery, max_retries=1)
+
+    result = executor.run(["workfold", "D:/TFS/SPF/develop"])
+
+    assert result.exit_code == 100
+    assert result.category == "unknown_failure"
+    assert result.recovery_triggered is False
+    assert result.retried is False
+    assert result.recovery_scripts == []
+    assert executed == []
+    assert runner.calls == 1
