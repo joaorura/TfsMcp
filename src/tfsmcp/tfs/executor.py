@@ -34,15 +34,5 @@ class RetryingTfsExecutor:
 
     @staticmethod
     def _should_try_recovery(args: Sequence[str], result: CommandResult) -> bool:
-        if result.category == "unauthorized":
-            return True
-
-        # Some TFVC auth failures in console-less/background runs return 100 without stderr/stdout.
-        if result.category == "unknown_failure" and result.exit_code == 100:
-            command = (args[0] if args else "").lower()
-            if command == "workfold":
-                # Detection calls use plain `workfold <path>` and should not trigger auth scripts.
-                return len(args) > 1 and str(args[1]).lower() == "/map"
-            return command in {"checkout", "undo", "checkin", "shelve", "workspace", "get"}
-
-        return False
+        _ = args
+        return result.category == "unauthorized"

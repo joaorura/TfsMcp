@@ -39,9 +39,10 @@ class RuntimeSessionActions:
                 if part and not part.endswith(":\\")
             )
         )
-        self._run_or_raise(["workspace", "/new", name, "/noprompt"])
+        self._run_or_raise(["workspace", "/new", name, "/location:server", "/noprompt"])
         self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
-        self._run_or_raise(["get", server_path, "/recursive", f"/workspace:{name}", "/noprompt"])
+        # Materialize mapped content explicitly into the local session path.
+        self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
         return server_path
 
     def create_shelveset(self, workspace_name: str) -> str:
@@ -52,7 +53,8 @@ class RuntimeSessionActions:
         self._run_or_raise(["workspace", "/delete", workspace_name, "/noprompt"])
 
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
-        self._run_or_raise(["get", session_path, "/recursive", f"/workspace:{workspace_name}", "/noprompt"])
+        _ = workspace_name
+        self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
 
     def promote_workspace(self, workspace_name: str, comment: str | None) -> str:
         final_comment = comment or workspace_name
@@ -73,21 +75,32 @@ def run_recovery_script(script_path) -> int:
     command = [
         "powershell",
         "-NoProfile",
+        "-NonInteractive",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
         str(script_path),
     ]
-    creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
-    return subprocess.run(command, check=False, creationflags=creationflags).returncode
+    # Avoid opening a new console window per script; this prevents popup storms
+    # when fallback triggers repeatedly in headless/background usage.
+    return subprocess.run(command, check=False).returncode
 
 
 def build_runtime() -> Runtime:
     config = load_config()
+    config.state_dir.mkdir(parents=True, exist_ok=True)
     tf_path = config.tf_path or TfExeLocator().locate()
-    runner = TfCommandRunner(tf_path, timeout_seconds=config.command_timeout_seconds)
+    runner = TfCommandRunner(
+        tf_path,
+        timeout_seconds=config.command_timeout_seconds,
+        working_directory=str(config.state_dir),
+    )
     classifier = TfOutputClassifier()
-    recovery = UnauthorizedRecoveryManager(config.tfs_scripts_path, run_recovery_script)
+    recovery = UnauthorizedRecoveryManager(
+        config.tfs_scripts_path,
+        run_recovery_script,
+        cooldown_seconds=config.recovery_cooldown_seconds,
+    )
     executor = RetryingTfsExecutor(runner, classifier, recovery, max_retries=config.max_unauthorized_retries)
     detector = TfsProjectDetector(executor)
     onboarding = TfsProjectOnboardingAdvisor(detector)

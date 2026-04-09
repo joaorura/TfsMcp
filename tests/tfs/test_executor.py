@@ -24,13 +24,25 @@ class FakeRunner:
     def run(self, args):
         self.calls += 1
         if self.calls == 1:
-            return CommandResult(command=["tf", *args], exit_code=1, stdout="", stderr="Access is denied", category="raw")
+            return CommandResult(
+                command=["tf", *args],
+                exit_code=1,
+                stdout="",
+                stderr="TF30063: You are not authorized to access https://tfs.example.com/tfs.",
+                category="raw",
+            )
         return CommandResult(command=["tf", *args], exit_code=0, stdout="checked out", stderr="", category="raw")
 
 
 def test_classifier_marks_unauthorized_result():
     classifier = TfOutputClassifier()
-    result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Unauthorized access", category="raw")
+    result = CommandResult(
+        command=["tf"],
+        exit_code=1,
+        stdout="",
+        stderr="You are not authorized to access https://tfs.example.com/tfs.",
+        category="raw",
+    )
 
     assert classifier.classify(result) == "unauthorized"
 
@@ -42,11 +54,11 @@ def test_classifier_marks_tf30063_as_unauthorized():
     assert classifier.classify(result) == "unauthorized"
 
 
-def test_classifier_marks_portuguese_access_denied_as_unauthorized():
+def test_classifier_does_not_mark_access_denied_as_unauthorized():
     classifier = TfOutputClassifier()
-    result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Acesso negado para a coleção", category="raw")
+    result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Access is denied", category="raw")
 
-    assert classifier.classify(result) == "unauthorized"
+    assert classifier.classify(result) != "unauthorized"
 
 
 def test_executor_does_not_retry_non_unauthorized_failures(tmp_path):
@@ -73,7 +85,13 @@ def test_executor_does_not_retry_non_unauthorized_failures(tmp_path):
 def test_executor_does_not_retry_when_max_retries_is_zero(tmp_path):
     runner = SequenceRunner(
         [
-            CommandResult(command=["tf", "checkout"], exit_code=1, stdout="", stderr="Access is denied", category="raw"),
+            CommandResult(
+                command=["tf", "checkout"],
+                exit_code=1,
+                stdout="",
+                stderr="TF30063: You are not authorized to access https://tfs.example.com/tfs.",
+                category="raw",
+            ),
         ]
     )
     executed = []
@@ -119,7 +137,13 @@ def test_executor_does_not_retry_when_recovery_script_fails(tmp_path):
     recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 1)
     runner = SequenceRunner(
         [
-            CommandResult(command=["tf", "checkout"], exit_code=1, stdout="", stderr="Access is denied", category="raw"),
+            CommandResult(
+                command=["tf", "checkout"],
+                exit_code=1,
+                stdout="",
+                stderr="TF30063: You are not authorized to access https://tfs.example.com/tfs.",
+                category="raw",
+            ),
         ]
     )
     executor = RetryingTfsExecutor(runner, TfOutputClassifier(), recovery, max_retries=1)
@@ -144,8 +168,20 @@ def test_executor_retries_only_once_even_with_higher_budget(tmp_path):
     recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
     runner = SequenceRunner(
         [
-            CommandResult(command=["tf", "checkout"], exit_code=1, stdout="", stderr="Access is denied", category="raw"),
-            CommandResult(command=["tf", "checkout"], exit_code=1, stdout="", stderr="Access is denied", category="raw"),
+            CommandResult(
+                command=["tf", "checkout"],
+                exit_code=1,
+                stdout="",
+                stderr="TF30063: You are not authorized to access https://tfs.example.com/tfs.",
+                category="raw",
+            ),
+            CommandResult(
+                command=["tf", "checkout"],
+                exit_code=1,
+                stdout="",
+                stderr="TF30063: You are not authorized to access https://tfs.example.com/tfs.",
+                category="raw",
+            ),
             CommandResult(command=["tf", "checkout"], exit_code=0, stdout="checked out", stderr="", category="raw"),
         ]
     )
@@ -179,12 +215,12 @@ def test_executor_retries_unknown_failure_exit_100(tmp_path):
 
     result = executor.run(["checkout", "D:/TFS/SPF/file.cs"])
 
-    assert result.exit_code == 0
-    assert result.category == "success"
-    assert result.recovery_triggered is True
-    assert result.retried is True
-    assert result.recovery_scripts == ["01-login.ps1"]
-    assert executed == ["01-login.ps1"]
+    assert result.exit_code == 100
+    assert result.category == "unknown_failure"
+    assert result.recovery_triggered is False
+    assert result.retried is False
+    assert result.recovery_scripts == []
+    assert executed == []
 
 
 def test_executor_does_not_recover_unknown_100_for_workfold_detection(tmp_path):

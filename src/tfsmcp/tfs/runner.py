@@ -5,9 +5,10 @@ from tfsmcp.contracts import CommandResult
 
 
 class TfCommandRunner:
-    def __init__(self, tf_path: str, timeout_seconds: int) -> None:
+    def __init__(self, tf_path: str, timeout_seconds: int, working_directory: str | None = None) -> None:
         self._tf_path = tf_path
         self._timeout_seconds = timeout_seconds
+        self._working_directory = working_directory
 
     def run(self, args: Sequence[str]) -> CommandResult:
         command = [self._tf_path, *args]
@@ -18,6 +19,7 @@ class TfCommandRunner:
                 text=True,
                 timeout=self._timeout_seconds,
                 check=False,
+                cwd=self._working_directory,
             )
             return CommandResult(
                 command=command,

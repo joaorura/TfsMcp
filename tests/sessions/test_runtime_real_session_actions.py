@@ -23,9 +23,9 @@ def test_runtime_session_actions_creates_real_workspace_mapping_and_get(tmp_path
 
     assert server_path == "$/SPF/Main"
     assert executor.commands == [
-        ["workspace", "/new", "agent-auth", "/noprompt"],
+        ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
         ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],
-        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["get", str(tmp_path / "agent-auth"), "/recursive", "/noprompt"],
     ]
 
 
@@ -37,7 +37,7 @@ def test_runtime_session_actions_resume_restores_workspace_contents(tmp_path):
     actions.resume_workspace("agent-auth", str(tmp_path / "agent-auth"))
 
     assert executor.commands == [
-        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth", "/noprompt"],
+         ["get", str(tmp_path / "agent-auth"), "/recursive", "/noprompt"],
     ]
 
 
@@ -76,6 +76,6 @@ def test_runtime_session_actions_resume_and_promote_methods_exist(tmp_path):
     actions.promote_workspace("agent-auth", "ship it")
 
     assert executor.commands == [
-        ["get", str(tmp_path / "agent-auth"), "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["get", str(tmp_path / "agent-auth"), "/recursive", "/noprompt"],
         ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
     ]

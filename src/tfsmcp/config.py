@@ -14,6 +14,7 @@ class ServiceConfig:
     state_dir: Path
     command_timeout_seconds: int
     max_unauthorized_retries: int
+    recovery_cooldown_seconds: int
 
 
 def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
@@ -29,4 +30,5 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
         state_dir=state_dir,
         command_timeout_seconds=int(env.get("TFSMCP_TIMEOUT", "120")),
         max_unauthorized_retries=int(env.get("TFSMCP_MAX_RETRIES", "1")),
+        recovery_cooldown_seconds=int(env.get("TFSMCP_RECOVERY_COOLDOWN", "120")),
     )

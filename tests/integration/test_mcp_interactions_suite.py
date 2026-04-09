@@ -60,9 +60,9 @@ class SequencedTfRunner:
             if self.checkout_calls == 1:
                 return CommandResult(
                     command=["tf", *args],
-                    exit_code=100,
+                    exit_code=1,
                     stdout="",
-                    stderr="",
+                    stderr="TF30063: You are not authorized",
                     category="raw",
                 )
             return CommandResult(
@@ -140,11 +140,11 @@ def test_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
     assert listed[0].status == "discarded"
 
     assert runner.commands == [
-        ["workspace", "/new", "agent-auth", "/noprompt"],
+        ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
         ["workfold", "/map", "$/SPF/Main", str(session_path), "/workspace:agent-auth", "/noprompt"],
-        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["get", str(session_path), "/recursive", "/noprompt"],
         ["shelve", "agent-auth", "/noprompt"],
-        ["get", str(session_path), "/recursive", "/workspace:agent-auth", "/noprompt"],
+        ["get", str(session_path), "/recursive", "/noprompt"],
         ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
         ["workspace", "/delete", "agent-auth", "/noprompt"],
     ]

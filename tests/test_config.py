@@ -12,6 +12,7 @@ def test_load_config_uses_defaults(tmp_path):
     assert config.tfs_scripts_path == Path("C:/tfs_scripts")
     assert config.state_dir == tmp_path / "state"
     assert config.max_unauthorized_retries == 1
+    assert config.recovery_cooldown_seconds == 120
 
 
 def test_load_config_uses_process_environment_when_env_not_passed(monkeypatch, tmp_path):
@@ -22,6 +23,17 @@ def test_load_config_uses_process_environment_when_env_not_passed(monkeypatch, t
 
     assert config.http_port == 40123
     assert config.state_dir == tmp_path / "runtime-state"
+
+
+def test_load_config_uses_custom_recovery_cooldown(tmp_path):
+    config = load_config(
+        {
+            "TFSMCP_STATE_DIR": str(tmp_path / "state"),
+            "TFSMCP_RECOVERY_COOLDOWN": "15",
+        }
+    )
+
+    assert config.recovery_cooldown_seconds == 15
 
 
 def test_configure_logging_creates_log_file(tmp_path):

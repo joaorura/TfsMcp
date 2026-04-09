@@ -7,13 +7,10 @@ class TfOutputClassifier:
         if result.exit_code == 0:
             return "success"
         unauthorized_tokens = [
-            "unauthorized",
-            "access is denied",
-            "not authorized",
-            "nao autorizado",
-            "não autorizado",
-            "acesso negado",
             "tf30063",
+            "not authorized to access",
+            "você não está autorizado a acessar",
+            "voce nao esta autorizado a acessar",
         ]
         if any(token in text for token in unauthorized_tokens):
             return "unauthorized"
