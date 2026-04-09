@@ -23,6 +23,29 @@ class FakeExecutor:
         )
 
 
+class FallbackExecutor:
+    def run(self, args):
+        if args[0] == "workfold":
+            return CommandResult(
+                command=["tf", *args],
+                exit_code=1,
+                stdout="",
+                stderr="TF14061: Unable to connect",
+                category="error",
+            )
+        return CommandResult(
+            command=["tf", *args],
+            exit_code=0,
+            stdout=(
+                "Informações locais:\n"
+                "  Caminho local         : D:/TFVC_ROOT/SPF/develop/Historico/Changelog.txt\n"
+                "  Caminho de servidor   : $/SPF/develop/Historico/Changelog.txt\n"
+            ),
+            stderr="",
+            category="success",
+        )
+
+
 def test_detector_returns_high_confidence_mapping():
     detector = TfsProjectDetector(FakeExecutor())
     result = detector.detect("D:/TFS/SPF")
@@ -76,6 +99,56 @@ def test_detector_uses_colon_parsed_values_with_input_path_fallback():
     assert result.server_path == "$/SPF/Main"
     assert result.local_path == "D:/TFS/SPF"
     assert result.is_agent_ready is True
+
+
+def test_detector_parses_localized_mapping_line():
+    localized_output = (
+        "===============================================================================\n"
+        "Workspace: WORKSPACE_USER (User Redacted - UFAL)\n"
+        "Coleção  : https://dev.azure.com/redacted-org\n"
+        " $/SPF/develop: D:/TFVC_ROOT/SPF/develop\n"
+    )
+    detector = TfsProjectDetector(FakeExecutor(stdout=localized_output))
+
+    result = detector.detect("D:/TFVC_ROOT/SPF/develop")
+
+    assert result.kind == "tfs_mapped"
+    assert result.workspace_name == "WORKSPACE_USER (User Redacted - UFAL)"
+    assert result.server_path == "$/SPF/develop"
+    assert result.local_path == "D:/TFVC_ROOT/SPF/develop"
+
+
+def test_detector_uses_parent_directory_when_path_looks_like_file():
+    detector = TfsProjectDetector(FakeExecutor())
+
+    result = detector.detect("D:/TFS/SPF/Historico/Changelog.txt")
+
+    assert result.kind == "tfs_mapped"
+
+
+def test_detector_falls_back_to_info_when_workfold_fails():
+    detector = TfsProjectDetector(FallbackExecutor())
+
+    result = detector.detect("D:/TFVC_ROOT/SPF/develop/Historico/Changelog.txt")
+
+    assert result.kind == "tfs_mapped"
+    assert result.server_path == "$/SPF/develop/Historico/Changelog.txt"
+    assert result.local_path == "D:/TFVC_ROOT/SPF/develop/Historico/Changelog.txt"
+
+
+def test_detector_parses_mapping_from_stderr_stream():
+    detector = TfsProjectDetector(
+        FakeExecutor(
+            stdout="",
+            stderr="Workspace: SPF_Joao\n $/SPF/Main: D:/TFS/SPF",
+        )
+    )
+
+    result = detector.detect("D:/TFS/SPF")
+
+    assert result.kind == "tfs_mapped"
+    assert result.server_path == "$/SPF/Main"
+    assert result.local_path == "D:/TFS/SPF"
 
 
 def test_onboarding_recommends_session_workflow():

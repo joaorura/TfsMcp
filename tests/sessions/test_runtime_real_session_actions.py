@@ -20,7 +20,7 @@ def test_runtime_session_actions_creates_real_workspace_mapping_and_get(tmp_path
     assert executor.commands == [
         ["workspace", "/new", "agent-auth"],
         ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth"],
-        ["get", str(tmp_path / "agent-auth"), "/recursive"],
+        ["get", "$/SPF/Main", "/recursive", "/workspace:agent-auth"],
     ]
 
 

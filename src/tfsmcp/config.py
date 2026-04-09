@@ -18,7 +18,8 @@ class ServiceConfig:
 
 def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
     env = os.environ if env is None else env
-    state_dir = Path(env.get("TFSMCP_STATE_DIR", "C:/ProgramData/TfsMcp"))
+    default_state_dir = Path(env.get("LOCALAPPDATA", "C:/ProgramData")) / "TfsMcp"
+    state_dir = Path(env.get("TFSMCP_STATE_DIR", str(default_state_dir)))
     return ServiceConfig(
         http_host=env.get("TFSMCP_HTTP_HOST", "127.0.0.1"),
         http_port=int(env.get("TFSMCP_HTTP_PORT", "39393")),

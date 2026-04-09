@@ -18,6 +18,15 @@ class RuntimeSessionActions:
     def __init__(self, executor) -> None:
         self._executor = executor
 
+    def _run_or_raise(self, args: list[str]):
+        result = self._executor.run(args)
+        if getattr(result, "exit_code", 1) != 0:
+            stderr = (getattr(result, "stderr", "") or "").strip()
+            stdout = (getattr(result, "stdout", "") or "").strip()
+            details = stderr or stdout or f"TF command failed: {' '.join(args)}"
+            raise RuntimeError(details)
+        return result
+
     def create_workspace(self, name: str, source_path: str, session_path: str) -> str:
         normalized_source = source_path.replace("\\", "/")
         server_path = (
@@ -30,24 +39,24 @@ class RuntimeSessionActions:
                 if part and not part.endswith(":\\")
             )
         )
-        self._executor.run(["workspace", "/new", name])
-        self._executor.run(["workfold", "/map", server_path, session_path, f"/workspace:{name}"])
-        self._executor.run(["get", session_path, "/recursive"])
+        self._run_or_raise(["workspace", "/new", name])
+        self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}"])
+        self._run_or_raise(["get", server_path, "/recursive", f"/workspace:{name}"])
         return server_path
 
     def create_shelveset(self, workspace_name: str) -> str:
-        self._executor.run(["shelve", workspace_name])
+        self._run_or_raise(["shelve", workspace_name])
         return workspace_name
 
     def remove_workspace(self, workspace_name: str) -> None:
-        self._executor.run(["workspace", "/delete", workspace_name])
+        self._run_or_raise(["workspace", "/delete", workspace_name])
 
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
-        self._executor.run(["get", session_path, "/recursive", f"/workspace:{workspace_name}"])
+        self._run_or_raise(["get", session_path, "/recursive", f"/workspace:{workspace_name}"])
 
     def promote_workspace(self, workspace_name: str, comment: str | None) -> str:
         final_comment = comment or workspace_name
-        self._executor.run(["checkin", f"/comment:{final_comment}", f"/workspace:{workspace_name}"])
+        self._run_or_raise(["checkin", f"/comment:{final_comment}", f"/workspace:{workspace_name}"])
         return final_comment
 
 
