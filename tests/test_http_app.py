@@ -77,6 +77,17 @@ def test_health_endpoint_reports_ok():
     assert response.json() == {"ok": True}
 
 
+def test_mcp_streamable_http_mount_exists():
+    app = build_http_app(
+        Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=FakeExecutor(), sessions=FakeSessions())
+    )
+    mounts = [route for route in app.routes if getattr(route, "path", None) == ""]
+
+    assert mounts
+    mcp_paths = [getattr(route, "path", None) for route in mounts[0].app.routes]
+    assert "/mcp" in mcp_paths
+
+
 def test_detect_endpoint_returns_detector_payload():
     client = build_client()
 

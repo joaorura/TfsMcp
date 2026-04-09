@@ -101,7 +101,49 @@ If a TFS command returns an unauthorized error, the service runs every `*.ps1` s
 4. Checkout files before editing.
 5. Use shelvesets for checkpoints.
 
+## Onboarding and simulated worktree
+
+This MCP does not clone a Git worktree. It creates a TFVC workspace/session pair that behaves like an isolated worktree for agents.
+
+Direct onboarding flow:
+
+1. Call `tfs_detect_project(path)`.
+2. If `kind == tfs_mapped`, call `tfs_onboard_project(path)` and follow `recommended_workflow`.
+3. Create an isolated session with `tfs_session_create(name, source_path, session_path)`.
+4. Perform edits only after `tfs_checkout(file)`.
+5. Use `tfs_session_suspend(name)` to checkpoint using shelveset.
+6. Use `tfs_session_resume(name)` to reactivate suspended session.
+7. Use `tfs_session_promote(name, comment)` when ready to promote.
+8. Use `tfs_session_discard(name)` to remove workspace and mark session discarded.
+
+How TFVC is used under the hood in simulated worktree mode:
+
+1. `tfs_session_create` runs `tf workspace /new <name>`.
+2. It maps server path to local session path using `tf workfold /map`.
+3. It materializes files with `tf get <session_path> /recursive`.
+4. `tfs_session_suspend` creates a shelveset (currently named with workspace/session name).
+5. `tfs_session_resume` currently runs a `tf get` refresh in that workspace.
+6. `tfs_session_promote` currently performs `tf checkin` scoped by workspace.
+7. `tfs_session_discard` deletes workspace via `tf workspace /delete`.
+
+Unauthorized recovery behavior:
+
+1. On unauthorized failures, scripts in `C:\tfs_scripts` are executed in alphabetical order.
+2. After scripts complete successfully, the original TF command is retried once.
+3. This retry path is intended for interactive re-auth scripts when running in user/background mode.
+
+Current limitations of simulated worktree mode:
+
+1. Resume does not perform real unshelve conflict resolution yet; it is currently a workspace refresh (`tf get`).
+2. Promote uses direct workspace checkin and not a full policy-rich promotion flow.
+3. Mapping validation/conflict recovery is basic and not yet exhaustive.
+4. Session state is local JSON state and not a distributed lock/coordination mechanism.
+5. Windows Service mode cannot open interactive auth UI; for interactive auth use background/user mode.
+
 ## Session APIs
+
+MCP transport:
+- Streamable HTTP endpoint: `http://127.0.0.1:39393/mcp`
 
 MCP tools:
 - `tfs_session_create(name, source_path, session_path)` creates a TFS-backed session workspace and stores an active session record.

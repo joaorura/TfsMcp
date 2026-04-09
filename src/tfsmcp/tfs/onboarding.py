@@ -30,5 +30,8 @@ class TfsProjectOnboardingAdvisor:
                 "Always checkout before editing controlled files.",
                 "If unauthorized occurs, recovery scripts are executed automatically.",
                 "Use hybrid sessions for agent isolation.",
+                "Simulated worktree uses TFVC workspace mapping plus tf get, not a Git clone.",
+                "Resume currently refreshes workspace files and does not perform full unshelve/conflict flow.",
+                "Promote currently runs checkin scoped by workspace; advanced promotion policy flow is not implemented.",
             ],
         )

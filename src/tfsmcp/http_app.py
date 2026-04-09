@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 
+from tfsmcp.mcp_server import build_mcp_server
 from tfsmcp.runtime import Runtime
 
 
 def build_http_app(runtime: Runtime) -> FastAPI:
     app = FastAPI()
+    mcp_server = build_mcp_server(runtime)
+    mcp_app = mcp_server.streamable_http_app()
 
     @app.get("/health")
     def health() -> dict[str, bool]:
@@ -54,5 +57,8 @@ def build_http_app(runtime: Runtime) -> FastAPI:
     def discard_session(name: str):
         record = runtime.sessions.discard(name)
         return {"ok": True, "data": jsonable_encoder(record), "error": None, "meta": {}}
+
+    # Mount after REST routes so /health and other API paths remain first-class, while exposing MCP at /mcp.
+    app.mount("/", mcp_app)
 
     return app
