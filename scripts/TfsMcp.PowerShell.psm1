@@ -75,7 +75,14 @@ function Test-CondaEnvironment {
         throw "Could not list Conda environments (exit code $LASTEXITCODE)."
     }
 
-    $result = $rawJson | ConvertFrom-Json
+    $rawText = ($rawJson | Out-String).Trim()
+    $jsonStartIndex = $rawText.IndexOf("{")
+    if ($jsonStartIndex -lt 0) {
+        throw "Conda environment list did not return JSON content. Raw output: $rawText"
+    }
+
+    $jsonText = $rawText.Substring($jsonStartIndex)
+    $result = $jsonText | ConvertFrom-Json
     foreach ($prefix in $result.envs) {
         if ((Split-Path -Path $prefix -Leaf) -ieq $EnvironmentName) {
             return $true

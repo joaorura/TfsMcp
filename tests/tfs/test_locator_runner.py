@@ -42,7 +42,7 @@ def test_locator_falls_back_when_discovered_tf_does_not_exist(monkeypatch):
 def test_runner_returns_structured_result(monkeypatch):
     monkeypatch.setattr(
         "tfsmcp.tfs.runner.subprocess.run",
-        lambda *args, **kwargs: Completed(stdout="ok", stderr="", returncode=0),
+        lambda *args, **kwargs: Completed(stdout=b"ok", stderr=b"", returncode=0),
     )
 
     runner = TfCommandRunner("tf", timeout_seconds=5)
@@ -52,6 +52,22 @@ def test_runner_returns_structured_result(monkeypatch):
     assert result.exit_code == 0
     assert result.stdout == "ok"
     assert result.stderr == ""
+
+
+def test_runner_decodes_non_utf8_output(monkeypatch):
+    monkeypatch.setattr(
+        "tfsmcp.tfs.runner.subprocess.run",
+        lambda *args, **kwargs: Completed(
+            stdout="Informações locais".encode("cp1252"),
+            stderr=b"",
+            returncode=0,
+        ),
+    )
+
+    runner = TfCommandRunner("tf", timeout_seconds=5)
+    result = runner.run(["info", "D:/TFS/SPF"])
+
+    assert "Informações locais" in result.stdout
 
 
 def test_runner_returns_structured_result_for_missing_tf(monkeypatch):

@@ -46,6 +46,61 @@ class FallbackExecutor:
         )
 
 
+class ParentWorkfoldExecutor:
+    def run(self, args):
+        command = args[0]
+        target = args[1].replace("\\", "/")
+        if command == "workfold" and target.endswith("/Fontes"):
+            return CommandResult(
+                command=["tf", *args],
+                exit_code=1,
+                stdout="",
+                stderr="The path is not mapped in workspace.",
+                category="error",
+            )
+        if command == "workfold" and target.endswith("/develop-pgp-30745"):
+            return CommandResult(
+                command=["tf", *args],
+                exit_code=0,
+                stdout=(
+                    "Workspace: SPF_Joao\n"
+                    " $/SPF/develop-pgp-30745: D:/TFVC_ROOT/SPF/develop-pgp-30745"
+                ),
+                stderr="",
+                category="success",
+            )
+        return CommandResult(
+            command=["tf", *args],
+            exit_code=1,
+            stdout="",
+            stderr="No mapping.",
+            category="error",
+        )
+
+
+class InfoItemsExecutor:
+    def run(self, args):
+        if args[0] == "workfold":
+            return CommandResult(
+                command=["tf", *args],
+                exit_code=1,
+                stdout="",
+                stderr="The path is not mapped in workspace.",
+                category="error",
+            )
+        return CommandResult(
+            command=["tf", *args],
+            exit_code=0,
+            stdout=(
+                "Workspace: SPF_Joao\n"
+                "Server item: $/SPF/develop-pgp-30745/Fontes\n"
+                "Local item: D:/TFVC_ROOT/SPF/develop-pgp-30745/Fontes"
+            ),
+            stderr="",
+            category="success",
+        )
+
+
 def test_detector_returns_high_confidence_mapping():
     detector = TfsProjectDetector(FakeExecutor())
     result = detector.detect("D:/TFS/SPF")
@@ -149,6 +204,28 @@ def test_detector_parses_mapping_from_stderr_stream():
     assert result.kind == "tfs_mapped"
     assert result.server_path == "$/SPF/Main"
     assert result.local_path == "D:/TFS/SPF"
+
+
+def test_detector_tries_parent_directories_for_workfold_mapping():
+    detector = TfsProjectDetector(ParentWorkfoldExecutor())
+
+    result = detector.detect("D:/TFVC_ROOT/SPF/develop-pgp-30745/Fontes")
+
+    assert result.kind == "tfs_mapped"
+    assert result.workspace_name == "SPF_Joao"
+    assert result.server_path == "$/SPF/develop-pgp-30745"
+    assert result.local_path == "D:/TFVC_ROOT/SPF/develop-pgp-30745"
+
+
+def test_detector_parses_info_output_item_labels():
+    detector = TfsProjectDetector(InfoItemsExecutor())
+
+    result = detector.detect("D:/TFVC_ROOT/SPF/develop-pgp-30745/Fontes")
+
+    assert result.kind == "tfs_mapped"
+    assert result.workspace_name == "SPF_Joao"
+    assert result.server_path == "$/SPF/develop-pgp-30745/Fontes"
+    assert result.local_path == "D:/TFVC_ROOT/SPF/develop-pgp-30745/Fontes"
 
 
 def test_onboarding_recommends_session_workflow():
