@@ -184,3 +184,6 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Local real-integration test config (machine-specific paths)
+tests/integration/real_test.local.json

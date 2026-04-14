@@ -12,8 +12,27 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 
-REAL_DIR = Path(r"D:\TFVC_ROOT\SPF\develop\Historico")
+def _load_local_real_test_config() -> dict:
+    config_path = Path(__file__).with_name("real_test.local.json")
+    if not config_path.exists():
+        return {}
+    return json.loads(config_path.read_text(encoding="utf-8"))
+
+
+REAL_TEST_CONFIG = _load_local_real_test_config()
+REAL_DIR = Path(
+    os.environ.get(
+        "TFSMCP_REAL_DIR",
+        REAL_TEST_CONFIG.get("real_dir", r"D:\TFVC\Project\Main\Folder"),
+    )
+)
 MCP_URL = "http://localhost:39393/mcp"
+SESSION_ROOT = Path(
+    os.environ.get(
+        "TFSMCP_REAL_SESSION_ROOT",
+        REAL_TEST_CONFIG.get("session_root", r"D:\TFVC\.tfs-sessions"),
+    )
+)
 TEST_SESSION_PREFIXES = ("mcp-iso-", "dbg-iso-", "probe-", "peek-")
 
 
@@ -26,13 +45,13 @@ def test_real_worktree_isolation_with_backup_and_restore(tmp_path):
 
     txt_files = sorted([p for p in REAL_DIR.glob("*.txt") if p.is_file()])
     if not txt_files:
-        pytest.skip("Need at least one .txt file in D:/TFVC_ROOT/SPF/develop/Historico")
+        pytest.skip(f"Need at least one .txt file in configured TFSMCP_REAL_DIR: {REAL_DIR}")
 
     real_txt_by_name = {p.name: p for p in txt_files}
     source_path_candidates = _build_source_path_candidates()
 
     suffix = uuid.uuid4().hex[:8]
-    session_root = Path(r"D:\TFS\.tfs-sessions")
+    session_root = SESSION_ROOT
 
     source_file: Path | None = None
     source_backup: Path | None = None
@@ -194,9 +213,14 @@ def _build_source_path_candidates() -> list[str]:
     if env_source:
         candidates.append(env_source)
 
+    configured = REAL_TEST_CONFIG.get("source_path_candidates", [])
+    for candidate in configured:
+        if isinstance(candidate, str) and candidate:
+            candidates.append(candidate)
+
     candidates.extend([
-        "$/SPF/develop/Historico",
-        "$/SPF/develop",
+        "$/Project/Main/Folder",
+        "$/Project/Main",
     ])
 
     # Preserve order while removing duplicates.
@@ -234,7 +258,7 @@ def _cleanup_state_records() -> None:
 
 
 def _cleanup_session_directories() -> None:
-    session_root = Path(r"D:/TFS/.tfs-sessions")
+    session_root = SESSION_ROOT
     if not session_root.exists():
         return
 

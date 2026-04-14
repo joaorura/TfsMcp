@@ -159,8 +159,8 @@ def test_detector_uses_colon_parsed_values_with_input_path_fallback():
 def test_detector_parses_localized_mapping_line():
     localized_output = (
         "===============================================================================\n"
-        "Workspace: WORKSPACE_USER (User Redacted - UFAL)\n"
-        "Coleção  : https://dev.azure.com/redacted-org\n"
+        "Workspace: DEVBOX01 (User Example - ORG)\n"
+        "Coleção  : https://dev.azure.com/example-org\n"
         " $/SPF/develop: D:/TFVC_ROOT/SPF/develop\n"
     )
     detector = TfsProjectDetector(FakeExecutor(stdout=localized_output))
@@ -168,7 +168,7 @@ def test_detector_parses_localized_mapping_line():
     result = detector.detect("D:/TFVC_ROOT/SPF/develop")
 
     assert result.kind == "tfs_mapped"
-    assert result.workspace_name == "WORKSPACE_USER (User Redacted - UFAL)"
+    assert result.workspace_name == "DEVBOX01 (User Example - ORG)"
     assert result.server_path == "$/SPF/develop"
     assert result.local_path == "D:/TFVC_ROOT/SPF/develop"
 
