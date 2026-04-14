@@ -10,7 +10,12 @@ class FakeDetector:
 
     def detect(self, path: str):
         self.paths.append(path)
-        return {"kind": "tfs_mapped", "localPath": path}
+        return {
+            "kind": "tfs_mapped",
+            "local_path": path,
+            "server_path": "$/SPF/Main",
+            "workspace_name": "agent-auth",
+        }
 
 
 class FakeOnboarding:
@@ -76,13 +81,46 @@ def test_handlers_delegate_to_runtime_dependencies():
     assert onboarding.paths == ["D:/TFS/SPF"]
 
     assert handlers["tfs_checkout"]("D:/TFS/SPF/file.cs")["command"] == ["checkout", "D:/TFS/SPF/file.cs"]
+    assert handlers["tfs_add"]("D:/TFS/SPF/new-file.cs")["command"] == ["add", "D:/TFS/SPF/new-file.cs"]
+    assert handlers["tfs_add"]("D:/TFS/SPF/new-folder", recursive=True)["command"] == [
+        "add",
+        "D:/TFS/SPF/new-folder",
+        "/recursive",
+    ]
     assert handlers["tfs_undo"]("D:/TFS/SPF/file.cs")["command"] == ["undo", "D:/TFS/SPF/file.cs"]
-    assert executor.commands == [["checkout", "D:/TFS/SPF/file.cs"], ["undo", "D:/TFS/SPF/file.cs"]]
+    assert executor.commands == [
+        ["checkout", "D:/TFS/SPF/file.cs"],
+        ["add", "D:/TFS/SPF/new-file.cs"],
+        ["add", "D:/TFS/SPF/new-folder", "/recursive"],
+        ["undo", "D:/TFS/SPF/file.cs"],
+    ]
+    assert handlers["tfs_status"]("D:/TFS/SPF")["command"] == ["status", "D:/TFS/SPF", "/recursive"]
+    assert handlers["tfs_get_latest"]("D:/TFS/SPF")["command"] == ["get", "D:/TFS/SPF", "/recursive", "/noprompt"]
+    assert handlers["tfs_shelveset_list"]("joao", "rqf-*")["command"] == [
+        "shelvesets",
+        "rqf-*",
+        "/owner:joao",
+    ]
+    assert handlers["tfs_unshelve"]("rqf-29", workspace="agent-auth")["command"] == [
+        "unshelve",
+        "rqf-29",
+        "/workspace:agent-auth",
+        "/noprompt",
+    ]
 
     assert handlers["tfs_session_create"]("agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth") == {
         "name": "agent-auth",
         "sourcePath": "D:/TFS/SPF",
         "sessionPath": "D:/TFS/agents/auth",
+    }
+    assert handlers["tfs_session_create_from_path"](
+        "agent-auth-2",
+        "D:/TFS/SPF",
+        "D:/TFS/agents/auth-2",
+    ) == {
+        "name": "agent-auth-2",
+        "sourcePath": "$/SPF/Main",
+        "sessionPath": "D:/TFS/agents/auth-2",
     }
     sessions.records = [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
     assert json.loads(handlers["tfs_session_list"]()) == {
@@ -90,8 +128,89 @@ def test_handlers_delegate_to_runtime_dependencies():
     }
     assert sessions.calls == [
         ("create", "agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth"),
+        ("create", "agent-auth-2", "$/SPF/Main", "D:/TFS/agents/auth-2"),
         ("list_records",),
     ]
+
+    assert handlers["tfs_checkin_preview"]("D:/TFS/SPF")["command"] == [
+        "status",
+        "D:/TFS/SPF",
+        "/recursive",
+    ]
+    assert handlers["tfs_history"]("D:/TFS/SPF", stop_after=5)["command"] == [
+        "history",
+        "D:/TFS/SPF",
+        "/stopafter:5",
+    ]
+    assert handlers["tfs_diff"]("D:/TFS/SPF", recursive=True)["command"] == [
+        "diff",
+        "D:/TFS/SPF",
+        "/recursive",
+    ]
+
+
+def test_session_create_from_path_requires_mapped_path():
+    class NotMappedDetector:
+        def detect(self, path: str):
+            return {"kind": "not_tfs", "server_path": None}
+
+    runtime = Runtime(
+        config=None,
+        detector=NotMappedDetector(),
+        onboarding=FakeOnboarding(),
+        executor=FakeExecutor(),
+        sessions=FakeSessions(),
+    )
+    handlers = build_tool_handlers(runtime)
+
+    try:
+        handlers["tfs_session_create_from_path"]("x", "D:/nope", "D:/sess")
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        assert "not TFS mapped" in str(exc)
+
+
+def test_session_validate_uses_named_record_path_and_workspace():
+    sessions = FakeSessions()
+    sessions.records = [
+        {
+            "name": "agent-auth",
+            "session_path": "D:/TFS/agents/auth",
+            "workspace_name": "agent-auth",
+        }
+    ]
+    executor = FakeExecutor()
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=executor, sessions=sessions)
+    handlers = build_tool_handlers(runtime)
+
+    result = handlers["tfs_session_validate"](name="agent-auth")
+
+    assert result["target_path"] == "D:/TFS/agents/auth"
+    assert result["session"]["name"] == "agent-auth"
+    assert executor.commands[-2] == ["workfold", "D:/TFS/agents/auth", "/workspace:agent-auth"]
+    assert executor.commands[-1] == ["status", "D:/TFS/agents/auth", "/recursive", "/workspace:agent-auth"]
+
+
+def test_session_validate_requires_name_or_path():
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=FakeExecutor(), sessions=FakeSessions())
+    handlers = build_tool_handlers(runtime)
+
+    try:
+        handlers["tfs_session_validate"]()
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "name' or 'path" in str(exc)
+
+
+def test_checkin_preview_requires_path_or_workspace():
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=FakeExecutor(), sessions=FakeSessions())
+    handlers = build_tool_handlers(runtime)
+
+    try:
+        handlers["tfs_checkin_preview"]()
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "path' or 'workspace" in str(exc)
 
 
 def test_session_handlers_delegate_create_suspend_discard(monkeypatch):
@@ -163,21 +282,41 @@ def test_build_mcp_server_uses_tfs_tools_name_and_registers_handlers(monkeypatch
         "tfs_detect_project",
         "tfs_onboard_project",
         "tfs_checkout",
+        "tfs_add",
+        "tfs_status",
+        "tfs_get_latest",
+        "tfs_shelveset_list",
+        "tfs_unshelve",
         "tfs_undo",
         "tfs_session_create",
+        "tfs_session_create_from_path",
         "tfs_session_list",
+        "tfs_session_validate",
         "tfs_session_suspend",
         "tfs_session_discard",
         "tfs_session_resume",
         "tfs_session_promote",
+        "tfs_checkin_preview",
+        "tfs_history",
+        "tfs_diff",
     ]
     assert callable(dict(registrations)["tfs_detect_project"])
     assert callable(dict(registrations)["tfs_undo"])
     assert callable(dict(registrations)["tfs_onboard_project"])
+    assert callable(dict(registrations)["tfs_add"])
+    assert callable(dict(registrations)["tfs_status"])
+    assert callable(dict(registrations)["tfs_get_latest"])
+    assert callable(dict(registrations)["tfs_shelveset_list"])
+    assert callable(dict(registrations)["tfs_unshelve"])
     assert callable(dict(registrations)["tfs_session_create"])
+    assert callable(dict(registrations)["tfs_session_create_from_path"])
     assert callable(dict(registrations)["tfs_session_list"])
+    assert callable(dict(registrations)["tfs_session_validate"])
     assert callable(dict(registrations)["tfs_session_suspend"])
     assert callable(dict(registrations)["tfs_session_discard"])
     assert callable(dict(registrations)["tfs_session_resume"])
     assert callable(dict(registrations)["tfs_session_promote"])
+    assert callable(dict(registrations)["tfs_checkin_preview"])
+    assert callable(dict(registrations)["tfs_history"])
+    assert callable(dict(registrations)["tfs_diff"])
     assert callable(dict(registrations)["tfs_checkout"])
