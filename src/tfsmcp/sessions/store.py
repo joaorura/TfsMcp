@@ -12,7 +12,12 @@ class SessionStore:
         if not self._path.exists():
             return []
         payload = json.loads(self._path.read_text(encoding="utf-8"))
-        return [SessionRecord(**item) for item in payload]
+        # Handle legacy single-object format or malformed JSON
+        if isinstance(payload, dict):
+            return [SessionRecord(**payload)]
+        if not isinstance(payload, list):
+            return []
+        return [SessionRecord(**item) for item in payload if isinstance(item, dict)]
 
     def save_all(self, records: list[SessionRecord]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
