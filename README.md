@@ -2,6 +2,25 @@
 
 Local TFS MCP service for Windows development machines.
 
+[![CI](https://github.com/joaorura/TfsMcp/actions/workflows/ci.yml/badge.svg)](https://github.com/joaorura/TfsMcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## Public Repository Setup
+
+This repository is prepared for public collaboration with:
+
+- CI workflow (`.github/workflows/ci.yml`)
+- Dependabot updates (`.github/dependabot.yml`)
+- Issue templates (`.github/ISSUE_TEMPLATE/*`)
+- Pull request template (`.github/PULL_REQUEST_TEMPLATE.md`)
+- Governance docs (`LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`)
+
+GitHub About recommendations:
+
+- Description: `Local TFVC MCP server for Windows automation workflows`
+- Website: repository URL or project docs URL
+- Topics: `mcp`, `tfvc`, `tfs`, `windows`, `python`, `automation`
+
 ## Scope
 
 - Target platform: Windows (TFVC + `tf.exe` + PowerShell scripts).
