@@ -65,7 +65,7 @@ def test_runtime_session_actions_uses_executor_for_create_suspend_discard(tmp_pa
     executor = FakeWorkspaceExecutor()
     actions = RuntimeSessionActions(executor)
 
-    server_path = actions.create_workspace("agent-auth", "$/SPF/Main", str(tmp_path / "agent-auth"))
+    server_path = actions.create_workspace("agent-auth", "$/SPF/Main", str(tmp_path / "agent-auth"), perform_get=True)
     shelveset = actions.create_shelveset("agent-auth")
     actions.remove_workspace("agent-auth")
 
@@ -89,6 +89,18 @@ def test_runtime_session_actions_raises_when_tf_command_fails(tmp_path):
         assert False, "Expected RuntimeError"
     except RuntimeError as exc:
         assert "simulated tf error" in str(exc)
+
+
+def test_runtime_session_actions_create_skips_get_by_default(tmp_path):
+    executor = FakeWorkspaceExecutor()
+    actions = RuntimeSessionActions(executor)
+
+    actions.create_workspace("agent-auth", "$/SPF/Main", str(tmp_path / "agent-auth"))
+
+    assert executor.commands == [
+        ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
+        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],
+    ]
 
 
 def test_runtime_session_actions_workspace_create_uses_session_path_as_temp_cwd(tmp_path):

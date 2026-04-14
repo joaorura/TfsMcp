@@ -12,6 +12,7 @@ class FakeRuntimeConfig:
         self.command_timeout_seconds = 5
         self.max_unauthorized_retries = 1
         self.recovery_cooldown_seconds = 120
+        self.session_create_auto_get = False
         self.tfs_scripts_path = tmp_path / "scripts"
         self.state_dir = tmp_path / "state"
         self.tfs_scripts_path.mkdir()

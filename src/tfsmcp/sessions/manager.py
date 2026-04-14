@@ -11,13 +11,24 @@ class SessionManager:
     def list_records(self) -> list[SessionRecord]:
         return self._store.load_all()
 
-    def create(self, name: str, source_path: str, session_path: Path) -> SessionRecord:
+    def create(
+        self,
+        name: str,
+        source_path: str,
+        session_path: Path,
+        perform_get: bool | None = None,
+    ) -> SessionRecord:
         records = self._store.load_all()
         for record in records:
             if record.name == name:
                 raise ValueError(name)
 
-        server_path = self._actions.create_workspace(name, source_path, str(session_path))
+        try:
+            server_path = self._actions.create_workspace(name, source_path, str(session_path), perform_get=perform_get)
+        except TypeError:
+            # Backward compatibility for custom action adapters that still expose
+            # create_workspace(name, source_path, session_path) only.
+            server_path = self._actions.create_workspace(name, source_path, str(session_path))
         record = SessionRecord(
             name,
             source_path,

@@ -17,9 +17,10 @@ class TfsProjectOnboardingAdvisor:
             },
             recommended_workflow={
                 "beforeEdit": "checkout",
-                "forParallelTask": "session_create",
+                "forParallelTask": "session_create_async",
                 "forCheckpoint": "shelve",
                 "forDiscard": "undo_or_session_discard",
+                "forSessionMaterialization": "session_materialize",
             },
             supports={
                 "basicTools": detection.kind == "tfs_mapped",
@@ -30,7 +31,10 @@ class TfsProjectOnboardingAdvisor:
                 "Always checkout before editing controlled files.",
                 "If unauthorized occurs, recovery scripts are executed automatically.",
                 "Use hybrid sessions for agent isolation.",
-                "Simulated worktree uses TFVC workspace mapping plus tf get, not a Git clone.",
+                "Session creation maps workspace first; use perform_get=true only when you need immediate file materialization.",
+                "Prefer tfs_session_materialize (or tfs_get_latest) as an explicit second step for large trees.",
+                "For long-running setup, use tfs_session_create_async and poll with tfs_session_create_job_status.",
+                "Simulated worktree uses TFVC workspace mapping and optional tf get, not a Git clone.",
                 "Resume currently refreshes workspace files and does not perform full unshelve/conflict flow.",
                 "Promote currently runs checkin scoped by workspace; advanced promotion policy flow is not implemented.",
             ],

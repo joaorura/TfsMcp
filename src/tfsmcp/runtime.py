@@ -16,8 +16,9 @@ from tfsmcp.tfs.runner import TfCommandRunner
 
 
 class RuntimeSessionActions:
-    def __init__(self, executor) -> None:
+    def __init__(self, executor, default_materialize_on_create: bool = False) -> None:
         self._executor = executor
+        self._default_materialize_on_create = default_materialize_on_create
 
     def _run_workspace_create(self, name: str, session_path: str) -> None:
         runner = getattr(self._executor, "_runner", None)
@@ -42,7 +43,13 @@ class RuntimeSessionActions:
             raise RuntimeError(details)
         return result
 
-    def create_workspace(self, name: str, source_path: str, session_path: str) -> str:
+    def create_workspace(
+        self,
+        name: str,
+        source_path: str,
+        session_path: str,
+        perform_get: bool | None = None,
+    ) -> str:
         normalized_source = source_path.replace("\\", "/")
         server_path = (
             normalized_source
@@ -56,9 +63,14 @@ class RuntimeSessionActions:
         )
         self._run_workspace_create(name, session_path)
         self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
-        # Materialize mapped content explicitly into the local session path.
-        self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
+        materialize = self._default_materialize_on_create if perform_get is None else perform_get
+        if materialize:
+            self.materialize_workspace(session_path)
         return server_path
+
+    def materialize_workspace(self, session_path: str) -> None:
+        # Optional explicit content materialization to avoid long create calls by default.
+        self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
 
     def create_shelveset(self, workspace_name: str) -> str:
         self._run_or_raise(["shelve", workspace_name, "/noprompt"])
@@ -124,6 +136,6 @@ def build_runtime() -> Runtime:
     onboarding = TfsProjectOnboardingAdvisor(detector)
     sessions = SessionManager(
         SessionStore(config.state_dir / "sessions.json"),
-        actions=RuntimeSessionActions(executor),
+        actions=RuntimeSessionActions(executor, default_materialize_on_create=config.session_create_auto_get),
     )
     return Runtime(config=config, detector=detector, onboarding=onboarding, executor=executor, sessions=sessions)

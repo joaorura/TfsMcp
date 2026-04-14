@@ -1,5 +1,8 @@
 from dataclasses import asdict, is_dataclass
 import json
+from threading import Lock
+from concurrent.futures import Future, ThreadPoolExecutor
+from uuid import uuid4
 
 from mcp.server.fastmcp import FastMCP
 
@@ -27,6 +30,27 @@ def _detection_field(detection, key: str):
 
 
 def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
+    session_jobs: dict[str, Future] = {}
+    session_jobs_lock = Lock()
+    session_job_runner = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tfsmcp-session")
+
+    def _resolve_session_record(name: str):
+        records = runtime.sessions.list_records()
+        for record in records:
+            record_name = record.get("name") if isinstance(record, dict) else getattr(record, "name", None)
+            if record_name == name:
+                return record
+        raise KeyError(name)
+
+    def _materialize_session_path(session_path: str, workspace_name: str | None = None, recursive: bool = True):
+        args = ["get", session_path]
+        if recursive:
+            args.append("/recursive")
+        if workspace_name:
+            args.append(f"/workspace:{workspace_name}")
+        args.append("/noprompt")
+        return runtime.executor.run(args)
+
     def tfs_add(filepath: str, recursive: bool = False):
         args = ["add", filepath]
         if recursive:
@@ -65,13 +89,85 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
         args.append("/noprompt")
         return runtime.executor.run(args)
 
-    def tfs_session_create_from_path(name: str, source_path: str, session_path: str):
+    def tfs_session_create_from_path(name: str, source_path: str, session_path: str, perform_get: bool = False):
         detection = runtime.detector.detect(source_path)
         kind = _detection_field(detection, "kind")
         server_path = _detection_field(detection, "server_path")
         if kind != "tfs_mapped" or not server_path:
             raise RuntimeError(f"Path is not TFS mapped: {source_path}")
-        return _to_json_value(runtime.sessions.create(name, server_path, session_path))
+        return _to_json_value(runtime.sessions.create(name, server_path, session_path, perform_get=perform_get))
+
+    def tfs_session_create(name: str, source_path: str, session_path: str, perform_get: bool = False):
+        return _to_json_value(runtime.sessions.create(name, source_path, session_path, perform_get=perform_get))
+
+    def _submit_session_create(name: str, source_path: str, session_path: str, perform_get: bool) -> dict:
+        job_id = str(uuid4())
+
+        def _job_body():
+            created = runtime.sessions.create(name, source_path, session_path, perform_get=perform_get)
+            return _to_json_value(created)
+
+        future = session_job_runner.submit(_job_body)
+        with session_jobs_lock:
+            session_jobs[job_id] = future
+
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "name": name,
+            "source_path": source_path,
+            "session_path": session_path,
+            "perform_get": perform_get,
+        }
+
+    def tfs_session_create_async(name: str, source_path: str, session_path: str, perform_get: bool = False):
+        return _submit_session_create(name, source_path, session_path, perform_get)
+
+    def tfs_session_create_from_path_async(name: str, source_path: str, session_path: str, perform_get: bool = False):
+        detection = runtime.detector.detect(source_path)
+        kind = _detection_field(detection, "kind")
+        server_path = _detection_field(detection, "server_path")
+        if kind != "tfs_mapped" or not server_path:
+            raise RuntimeError(f"Path is not TFS mapped: {source_path}")
+        return _submit_session_create(name, server_path, session_path, perform_get)
+
+    def tfs_session_create_job_status(job_id: str):
+        with session_jobs_lock:
+            future = session_jobs.get(job_id)
+        if future is None:
+            raise KeyError(job_id)
+
+        if not future.done():
+            return {"job_id": job_id, "status": "running"}
+
+        exc = future.exception()
+        if exc is not None:
+            return {"job_id": job_id, "status": "failed", "error": str(exc)}
+
+        return {"job_id": job_id, "status": "completed", "result": future.result()}
+
+    def tfs_session_materialize(name: str | None = None, session_path: str | None = None, recursive: bool = True):
+        if not name and not session_path:
+            raise ValueError("Provide 'name' or 'session_path' for materialization")
+
+        resolved_session_path = session_path
+        workspace_name = None
+        if name:
+            record = _resolve_session_record(name)
+            if not resolved_session_path:
+                resolved_session_path = record.get("session_path") if isinstance(record, dict) else getattr(record, "session_path", None)
+            workspace_name = record.get("workspace_name") if isinstance(record, dict) else getattr(record, "workspace_name", None)
+
+        if not resolved_session_path:
+            raise ValueError("Unable to resolve session_path for materialization")
+
+        result = _materialize_session_path(resolved_session_path, workspace_name=workspace_name, recursive=recursive)
+        return {
+            "name": name,
+            "session_path": resolved_session_path,
+            "workspace_name": workspace_name,
+            "result": _to_json_value(result),
+        }
 
     def tfs_session_validate(name: str | None = None, path: str | None = None):
         records = runtime.sessions.list_records()
@@ -153,14 +249,16 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
         "tfs_shelveset_list": tfs_shelveset_list,
         "tfs_unshelve": tfs_unshelve,
         "tfs_undo": lambda filepath: runtime.executor.run(["undo", filepath]),
-        "tfs_session_create": lambda name, source_path, session_path: _to_json_value(
-            runtime.sessions.create(name, source_path, session_path)
-        ),
+        "tfs_session_create": tfs_session_create,
         "tfs_session_create_from_path": tfs_session_create_from_path,
+        "tfs_session_create_async": tfs_session_create_async,
+        "tfs_session_create_from_path_async": tfs_session_create_from_path_async,
+        "tfs_session_create_job_status": tfs_session_create_job_status,
         "tfs_session_list": lambda: json.dumps(
             {"sessions": _to_json_value(runtime.sessions.list_records())},
             ensure_ascii=False,
         ),
+        "tfs_session_materialize": tfs_session_materialize,
         "tfs_session_validate": tfs_session_validate,
         "tfs_session_suspend": lambda name: _to_json_value(runtime.sessions.suspend(name)),
         "tfs_session_discard": lambda name: _to_json_value(runtime.sessions.discard(name)),

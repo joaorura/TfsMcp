@@ -15,6 +15,18 @@ class ServiceConfig:
     command_timeout_seconds: int
     max_unauthorized_retries: int
     recovery_cooldown_seconds: int
+    session_create_auto_get: bool
+
+
+def _to_bool(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
@@ -31,4 +43,5 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
         command_timeout_seconds=int(env.get("TFSMCP_TIMEOUT", "120")),
         max_unauthorized_retries=int(env.get("TFSMCP_MAX_RETRIES", "1")),
         recovery_cooldown_seconds=int(env.get("TFSMCP_RECOVERY_COOLDOWN", "120")),
+        session_create_auto_get=_to_bool(env.get("TFSMCP_SESSION_CREATE_AUTO_GET"), False),
     )
