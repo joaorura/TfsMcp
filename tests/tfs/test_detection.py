@@ -233,7 +233,8 @@ def test_onboarding_recommends_session_workflow():
     result = advisor.build("D:/TFS/SPF")
 
     assert result.recommended_workflow["beforeEdit"] == "checkout"
-    assert result.recommended_workflow["forParallelTask"] == "session_create"
+    assert result.recommended_workflow["forParallelTask"] == "session_create_async"
+    assert result.recommended_workflow["forSessionMaterialization"] == "session_materialize"
     assert result.supports["unauthorizedRecovery"] is True
 
 
@@ -246,7 +247,8 @@ def test_onboarding_keeps_task4_workflow_for_non_tfs_project():
 
     assert result.project_kind == "not_tfs"
     assert result.recommended_workflow["beforeEdit"] == "checkout"
-    assert result.recommended_workflow["forParallelTask"] == "session_create"
+    assert result.recommended_workflow["forParallelTask"] == "session_create_async"
+    assert result.recommended_workflow["forSessionMaterialization"] == "session_materialize"
     assert result.recommended_workflow["forCheckpoint"] == "shelve"
     assert result.recommended_workflow["forDiscard"] == "undo_or_session_discard"
     assert result.supports["basicTools"] is False

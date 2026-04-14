@@ -123,8 +123,9 @@ If a TFS command returns an unauthorized error, the service runs every `*.ps1` s
 1. Detect the project with `tfs_detect_project`.
 2. Get guidance with `tfs_onboard_project`.
 3. Create isolated work with `tfs_session_create`.
-4. Checkout files before editing.
-5. Use shelvesets for checkpoints.
+4. Materialize files when needed with `tfs_session_materialize` (or set `perform_get=true` on create).
+5. Checkout files before editing.
+6. Use shelvesets for checkpoints.
 
 ## Onboarding and simulated worktree
 
@@ -135,21 +136,24 @@ Direct onboarding flow:
 1. Call `tfs_detect_project(path)`.
 2. If `kind == tfs_mapped`, call `tfs_onboard_project(path)` and follow `recommended_workflow`.
 3. Create an isolated session with `tfs_session_create(name, source_path, session_path)`.
-4. Perform edits only after `tfs_checkout(file)`.
-5. Use `tfs_session_suspend(name)` to checkpoint using shelveset.
-6. Use `tfs_session_resume(name)` to reactivate suspended session.
-7. Use `tfs_session_promote(name, comment)` when ready to promote.
-8. Use `tfs_session_discard(name)` to remove workspace and mark session discarded.
+4. For long-running setups, prefer `tfs_session_create_async(...)` and poll `tfs_session_create_job_status(job_id)`.
+5. Materialize session content explicitly with `tfs_session_materialize(name=...)` when needed.
+6. Perform edits only after `tfs_checkout(file)`.
+7. Use `tfs_session_suspend(name)` to checkpoint using shelveset.
+8. Use `tfs_session_resume(name)` to reactivate suspended session.
+9. Use `tfs_session_promote(name, comment)` when ready to promote.
+10. Use `tfs_session_discard(name)` to remove workspace and mark session discarded.
 
 How TFVC is used under the hood in simulated worktree mode:
 
 1. `tfs_session_create` runs `tf workspace /new <name>`.
 2. It maps server path to local session path using `tf workfold /map`.
-3. It materializes files with `tf get <session_path> /recursive`.
-4. `tfs_session_suspend` creates a shelveset (currently named with workspace/session name).
-5. `tfs_session_resume` currently runs a `tf get` refresh in that workspace.
-6. `tfs_session_promote` currently performs `tf checkin` scoped by workspace.
-7. `tfs_session_discard` deletes workspace via `tf workspace /delete`.
+3. It optionally materializes files with `tf get <session_path> /recursive` when `perform_get=true` or when env `TFSMCP_SESSION_CREATE_AUTO_GET=true`.
+4. `tfs_session_materialize` can run `tf get` later as a separate step.
+5. `tfs_session_suspend` creates a shelveset (currently named with workspace/session name).
+6. `tfs_session_resume` currently runs a `tf get` refresh in that workspace.
+7. `tfs_session_promote` currently performs `tf checkin` scoped by workspace.
+8. `tfs_session_discard` deletes workspace via `tf workspace /delete`.
 
 Unauthorized recovery behavior:
 
@@ -182,8 +186,12 @@ MCP tools:
 - `tfs_get_latest(path, recursive=true, workspace=null)` runs `tf get` to sync latest.
 - `tfs_shelveset_list(owner=null, name_pattern=null)` lists available shelvesets.
 - `tfs_unshelve(name, workspace=null)` applies a shelveset into a workspace.
-- `tfs_session_create(name, source_path, session_path)` creates a TFS-backed session workspace and stores an active session record.
-- `tfs_session_create_from_path(name, source_path, session_path)` auto-resolves local path to server path before creating session.
+- `tfs_session_create(name, source_path, session_path, perform_get=false)` creates a TFS-backed session workspace and stores an active session record.
+- `tfs_session_create_from_path(name, source_path, session_path, perform_get=false)` auto-resolves local path to server path before creating session.
+- `tfs_session_create_async(name, source_path, session_path, perform_get=false)` starts session creation in background and returns a `job_id`.
+- `tfs_session_create_from_path_async(name, source_path, session_path, perform_get=false)` async version with auto server-path resolution.
+- `tfs_session_create_job_status(job_id)` returns queued/running/completed/failed status for session creation job.
+- `tfs_session_materialize(name=null, session_path=null, recursive=true)` runs explicit `tf get` for a session path.
 - `tfs_session_list()` returns the stored session records.
 - `tfs_session_validate(name=null, path=null)` diagnoses mapping/status for a session or path.
 - `tfs_session_suspend(name)` stores a suspended state and checkpoint name.
@@ -197,7 +205,8 @@ MCP tools:
 Current real-workspace behavior:
 - session creation runs `tf workspace /new`
 - maps with `tf workfold /map`
-- populates files with `tf get`
+- skips `tf get` by default (fast path)
+- can populate files with `tfs_session_materialize(...)` or `perform_get=true`
 
 Still not implemented:
 - full resume via real unshelve

@@ -15,13 +15,25 @@ class FakeExecutor:
         return Result()
 
 
-def test_runtime_session_actions_creates_real_workspace_mapping_and_get(tmp_path):
+def test_runtime_session_actions_creates_real_workspace_mapping_without_get_by_default(tmp_path):
     executor = FakeExecutor()
     actions = RuntimeSessionActions(executor)
 
     server_path = actions.create_workspace("agent-auth", "$/SPF/Main", str(tmp_path / "agent-auth"))
 
     assert server_path == "$/SPF/Main"
+    assert executor.commands == [
+        ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
+        ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],
+    ]
+
+
+def test_runtime_session_actions_can_materialize_during_create(tmp_path):
+    executor = FakeExecutor()
+    actions = RuntimeSessionActions(executor)
+
+    actions.create_workspace("agent-auth", "$/SPF/Main", str(tmp_path / "agent-auth"), perform_get=True)
+
     assert executor.commands == [
         ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
         ["workfold", "/map", "$/SPF/Main", str(tmp_path / "agent-auth"), "/workspace:agent-auth", "/noprompt"],

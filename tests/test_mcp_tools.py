@@ -41,8 +41,8 @@ class FakeSessions:
         self.calls = []
         self.records = []
 
-    def create(self, name: str, source_path: str, session_path: str):
-        self.calls.append(("create", name, source_path, session_path))
+    def create(self, name: str, source_path: str, session_path: str, perform_get: bool | None = None):
+        self.calls.append(("create", name, source_path, session_path, perform_get))
         return {"name": name, "sourcePath": source_path, "sessionPath": session_path}
 
     def list_records(self):
@@ -127,8 +127,8 @@ def test_handlers_delegate_to_runtime_dependencies():
         "sessions": [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
     }
     assert sessions.calls == [
-        ("create", "agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth"),
-        ("create", "agent-auth-2", "$/SPF/Main", "D:/TFS/agents/auth-2"),
+        ("create", "agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth", False),
+        ("create", "agent-auth-2", "$/SPF/Main", "D:/TFS/agents/auth-2", False),
         ("list_records",),
     ]
 
@@ -222,6 +222,50 @@ def test_session_handlers_delegate_create_suspend_discard(monkeypatch):
     assert handlers["tfs_session_discard"]("agent-auth")["status"] == "discarded"
 
 
+def test_session_create_can_force_get_during_create():
+    sessions = FakeSessions()
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=FakeExecutor(), sessions=sessions)
+    handlers = build_tool_handlers(runtime)
+
+    handlers["tfs_session_create"]("agent-auth", "$/SPF/Main", "D:/TFS/agents/auth", perform_get=True)
+
+    assert sessions.calls == [("create", "agent-auth", "$/SPF/Main", "D:/TFS/agents/auth", True)]
+
+
+def test_session_create_async_and_status_completed():
+    sessions = FakeSessions()
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=FakeExecutor(), sessions=sessions)
+    handlers = build_tool_handlers(runtime)
+
+    queued = handlers["tfs_session_create_async"]("agent-auth", "$/SPF/Main", "D:/TFS/agents/auth")
+    result = handlers["tfs_session_create_job_status"](queued["job_id"])
+    if result["status"] == "running":
+        result = handlers["tfs_session_create_job_status"](queued["job_id"])
+
+    assert queued["status"] == "queued"
+    assert result["status"] == "completed"
+    assert result["result"]["name"] == "agent-auth"
+
+
+def test_session_materialize_uses_record_workspace_and_path():
+    sessions = FakeSessions()
+    sessions.records = [
+        {
+            "name": "agent-auth",
+            "session_path": "D:/TFS/agents/auth",
+            "workspace_name": "agent-auth",
+        }
+    ]
+    executor = FakeExecutor()
+    runtime = Runtime(config=None, detector=FakeDetector(), onboarding=FakeOnboarding(), executor=executor, sessions=sessions)
+    handlers = build_tool_handlers(runtime)
+
+    payload = handlers["tfs_session_materialize"](name="agent-auth")
+
+    assert payload["session_path"] == "D:/TFS/agents/auth"
+    assert executor.commands[-1] == ["get", "D:/TFS/agents/auth", "/recursive", "/workspace:agent-auth", "/noprompt"]
+
+
 def test_session_handlers_delegate_resume_and_promote():
     sessions = FakeSessions()
     runtime = Runtime(config=None, detector=None, onboarding=None, executor=None, sessions=sessions)
@@ -290,7 +334,11 @@ def test_build_mcp_server_uses_tfs_tools_name_and_registers_handlers(monkeypatch
         "tfs_undo",
         "tfs_session_create",
         "tfs_session_create_from_path",
+        "tfs_session_create_async",
+        "tfs_session_create_from_path_async",
+        "tfs_session_create_job_status",
         "tfs_session_list",
+        "tfs_session_materialize",
         "tfs_session_validate",
         "tfs_session_suspend",
         "tfs_session_discard",
@@ -310,7 +358,11 @@ def test_build_mcp_server_uses_tfs_tools_name_and_registers_handlers(monkeypatch
     assert callable(dict(registrations)["tfs_unshelve"])
     assert callable(dict(registrations)["tfs_session_create"])
     assert callable(dict(registrations)["tfs_session_create_from_path"])
+    assert callable(dict(registrations)["tfs_session_create_async"])
+    assert callable(dict(registrations)["tfs_session_create_from_path_async"])
+    assert callable(dict(registrations)["tfs_session_create_job_status"])
     assert callable(dict(registrations)["tfs_session_list"])
+    assert callable(dict(registrations)["tfs_session_materialize"])
     assert callable(dict(registrations)["tfs_session_validate"])
     assert callable(dict(registrations)["tfs_session_suspend"])
     assert callable(dict(registrations)["tfs_session_discard"])
