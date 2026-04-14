@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from tfsmcp.contracts import CommandResult
@@ -129,15 +130,15 @@ def test_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
     resumed = handlers["tfs_session_resume"]("agent-auth")
     promoted = handlers["tfs_session_promote"]("agent-auth", "ship it")
     discarded = handlers["tfs_session_discard"]("agent-auth")
-    listed = handlers["tfs_session_list"]()
+    listed = json.loads(handlers["tfs_session_list"]())
 
-    assert created.status == "active"
-    assert suspended.status == "suspended"
-    assert resumed.status == "active"
-    assert promoted.status == "promoted"
-    assert promoted.last_shelveset == "ship it"
-    assert discarded.status == "discarded"
-    assert listed[0].status == "discarded"
+    assert created["status"] == "active"
+    assert suspended["status"] == "suspended"
+    assert resumed["status"] == "active"
+    assert promoted["status"] == "promoted"
+    assert promoted["last_shelveset"] == "ship it"
+    assert discarded["status"] == "discarded"
+    assert listed["sessions"][0]["status"] == "discarded"
 
     assert runner.commands == [
         ["workspace", "/new", "agent-auth", "/location:server", "/noprompt"],
