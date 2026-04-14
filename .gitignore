@@ -185,5 +185,8 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local debug helpers
+.tmp_dbg*.py
+
 # Local real-integration test config (machine-specific paths)
 tests/integration/real_test.local.json

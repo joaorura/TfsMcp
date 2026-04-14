@@ -2,6 +2,12 @@
 
 Local TFS MCP service for Windows development machines.
 
+## Scope
+
+- Target platform: Windows (TFVC + `tf.exe` + PowerShell scripts).
+- Transport: MCP Streamable HTTP (`/mcp`).
+- This project is designed for TFVC-style agent workflows (sessions, shelvesets, check-in flow).
+
 ## Install dependencies
 
 ```bash
@@ -148,12 +154,26 @@ MCP transport:
 This service is MCP-only now. Legacy REST endpoints (`/health`, `/checkout`, `/sessions`, etc.) are intentionally not exposed.
 
 MCP tools:
+- `tfs_detect_project(path)` detects if path is TFVC-mapped and returns mapping metadata.
+- `tfs_onboard_project(path)` returns recommended TFVC workflow guidance.
+- `tfs_checkout(filepath)` checks out an existing file in TFVC.
+- `tfs_add(filepath, recursive=false)` adds a new file/folder to source control.
+- `tfs_undo(filepath)` undoes pending changes for a file/path.
+- `tfs_status(path, recursive=true, workspace=null)` returns pending changes/status.
+- `tfs_get_latest(path, recursive=true, workspace=null)` runs `tf get` to sync latest.
+- `tfs_shelveset_list(owner=null, name_pattern=null)` lists available shelvesets.
+- `tfs_unshelve(name, workspace=null)` applies a shelveset into a workspace.
 - `tfs_session_create(name, source_path, session_path)` creates a TFS-backed session workspace and stores an active session record.
+- `tfs_session_create_from_path(name, source_path, session_path)` auto-resolves local path to server path before creating session.
 - `tfs_session_list()` returns the stored session records.
+- `tfs_session_validate(name=null, path=null)` diagnoses mapping/status for a session or path.
 - `tfs_session_suspend(name)` stores a suspended state and checkpoint name.
 - `tfs_session_discard(name)` discards a session and deletes its workspace.
 - `tfs_session_resume(name)` restores an existing session to active state.
 - `tfs_session_promote(name, comment)` records a promoted state and stores the promote/checkpoint result.
+- `tfs_checkin_preview(path=null, workspace=null, recursive=true)` previews pending check-in items.
+- `tfs_history(path, stop_after=null, recursive=false)` returns TFVC history output.
+- `tfs_diff(path, recursive=false, workspace=null)` returns TFVC diff output.
 
 Current real-workspace behavior:
 - session creation runs `tf workspace /new`
