@@ -1,3 +1,5 @@
+import json
+
 from tfsmcp.mcp_server import build_mcp_server, build_tool_handlers
 from tfsmcp.runtime import Runtime
 
@@ -83,7 +85,9 @@ def test_handlers_delegate_to_runtime_dependencies():
         "sessionPath": "D:/TFS/agents/auth",
     }
     sessions.records = [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
-    assert handlers["tfs_session_list"]() == [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
+    assert json.loads(handlers["tfs_session_list"]()) == {
+        "sessions": [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
+    }
     assert sessions.calls == [
         ("create", "agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth"),
         ("list_records",),

@@ -1,5 +1,6 @@
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from pathlib import PureWindowsPath
 
 from tfsmcp.config import load_config
@@ -17,6 +18,20 @@ from tfsmcp.tfs.runner import TfCommandRunner
 class RuntimeSessionActions:
     def __init__(self, executor) -> None:
         self._executor = executor
+
+    def _run_workspace_create(self, name: str, session_path: str) -> None:
+        runner = getattr(self._executor, "_runner", None)
+        if runner is None or not hasattr(runner, "_working_directory"):
+            self._run_or_raise(["workspace", "/new", name, "/location:server", "/noprompt"])
+            return
+
+        Path(session_path).mkdir(parents=True, exist_ok=True)
+        original_cwd = getattr(runner, "_working_directory", None)
+        runner._working_directory = session_path
+        try:
+            self._run_or_raise(["workspace", "/new", name, "/location:server", "/noprompt"])
+        finally:
+            runner._working_directory = original_cwd
 
     def _run_or_raise(self, args: list[str]):
         result = self._executor.run(args)
@@ -39,7 +54,7 @@ class RuntimeSessionActions:
                 if part and not part.endswith(":\\")
             )
         )
-        self._run_or_raise(["workspace", "/new", name, "/location:server", "/noprompt"])
+        self._run_workspace_create(name, session_path)
         self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
         # Materialize mapped content explicitly into the local session path.
         self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
@@ -93,7 +108,10 @@ def build_runtime() -> Runtime:
     runner = TfCommandRunner(
         tf_path,
         timeout_seconds=config.command_timeout_seconds,
-        working_directory=str(config.state_dir),
+        # Do not force cwd to state_dir for tf.exe commands.
+        # Using a mapped local folder here can make `tf workspace /new`
+        # fail with "path already mapped" against unrelated workspaces.
+        working_directory=None,
     )
     classifier = TfOutputClassifier()
     recovery = UnauthorizedRecoveryManager(

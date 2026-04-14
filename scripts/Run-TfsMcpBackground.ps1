@@ -15,6 +15,22 @@ if (-not $env:TFSMCP_STATE_DIR) {
     $env:TFSMCP_STATE_DIR = Join-Path $env:LOCALAPPDATA "TfsMcp"
 }
 
-# Keep the process attached to the MCP server lifecycle in this hidden PowerShell host.
+# Prefer launching module directly with the target environment Python.
+$condaExe = Get-CondaExecutable
+$condaRoot = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetDirectoryName($condaExe))
+$envPython = Join-Path (Join-Path $condaRoot "envs\$EnvironmentName") "python.exe"
+
+if (Test-Path -Path $envPython) {
+    Push-Location -Path $projectRoot
+    try {
+        & $envPython -m tfsmcp
+        exit [int]$LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+# Fallback to conda-run module invocation if direct python is unavailable.
 $exitCode = Invoke-TfsMcpModule -EnvironmentName $EnvironmentName -ProjectRoot $projectRoot -ModuleName "tfsmcp"
 exit $exitCode

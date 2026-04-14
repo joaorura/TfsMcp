@@ -63,7 +63,7 @@ def test_build_runtime_wires_dependencies(tmp_path, monkeypatch):
 
     assert runtime.config.http_host == "127.0.0.1"
     assert runtime.executor._runner.tf_path == "tf"
-    assert runtime.executor._runner.working_directory == str(tmp_path / "state")
+    assert runtime.executor._runner.working_directory is None
     assert runtime.onboarding.detector is runtime.detector
     assert runtime.sessions["store"]._path.name == "sessions.json"
     assert runtime.sessions["actions"] is not None
