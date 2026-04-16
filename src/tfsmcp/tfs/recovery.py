@@ -2,6 +2,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -28,13 +31,25 @@ class UnauthorizedRecoveryManager:
         now = self._now_fn()
         if self._last_run_at is not None and (now - self._last_run_at) < self._cooldown_seconds:
             # Cooldown active: avoid reopening interactive auth scripts repeatedly.
+            logger.info("Recovery cooldown active, skipping script execution")
             return RecoveryRunResult(scripts=[], succeeded=True)
 
+        logger.warning(
+            "TFS authorization failed - running recovery scripts. "
+            "Interactive authentication may be required. "
+            "Please complete any login dialogs that appear."
+        )
+        
         self._last_run_at = now
         executed: list[str] = []
         for script in sorted(self._scripts_dir.glob("*.ps1")):
+            logger.info(f"Executing recovery script: {script.name}")
             exit_code = self._run_script(script)
             executed.append(script.name)
             if exit_code != 0:
+                logger.error(f"Recovery script {script.name} failed with exit code {exit_code}")
                 return RecoveryRunResult(scripts=executed, succeeded=False)
+            logger.info(f"Recovery script {script.name} completed successfully")
+        
+        logger.info("All recovery scripts completed successfully")
         return RecoveryRunResult(scripts=executed, succeeded=True)

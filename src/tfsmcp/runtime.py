@@ -99,18 +99,85 @@ class Runtime:
 
 
 def run_recovery_script(script_path) -> int:
+    import logging
+    import threading
+    from tfsmcp.tfs.window_monitor import TfWindowMonitor
+
+    logger = logging.getLogger(__name__)
+
     command = [
         "powershell",
         "-NoProfile",
-        "-NonInteractive",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
         str(script_path),
     ]
-    # Avoid opening a new console window per script; this prevents popup storms
-    # when fallback triggers repeatedly in headless/background usage.
-    return subprocess.run(command, check=False).returncode
+    # Allow interactive windows to appear but redirect output to avoid handle issues
+    # Using DEVNULL for stdout/stderr prevents blocking while allowing GUI dialogs
+    
+    # Start process with redirected output to prevent console handle issues
+    import subprocess as sp
+    process = sp.Popen(
+        command,
+        stdout=sp.DEVNULL,
+        stderr=sp.DEVNULL,
+    )
+    
+    # Monitor for interactive authentication windows (e.g., Azure DevOps login dialog)
+    # that may be spawned by tf.exe during recovery scripts
+    monitor = TfWindowMonitor()
+    
+    def monitor_windows():
+        # Give the script time to spawn tf.exe and potentially open login dialog
+        import time
+        time.sleep(1)
+        
+        # Search for tf.exe child processes
+        try:
+            import psutil
+            parent = psutil.Process(process.pid)
+            for child in parent.children(recursive=True):
+                if "tf.exe" in child.name().lower() or "tf" == child.name().lower():
+                    logger.info(
+                        "Detected tf.exe process - monitoring for interactive authentication dialogs. "
+                        "If a login window appears, please complete authentication."
+                    )
+                    # Monitor this tf.exe process for interactive windows
+                    # Extended timeout (10 minutes) to allow user to complete authentication
+                    result = monitor.monitor_process_windows(
+                        pid=child.pid,
+                        timeout_seconds=600,
+                        on_window_detected=lambda titles: logger.warning(
+                            f"Interactive window detected: {titles}. "
+                            "Waiting for user to complete authentication..."
+                        ),
+                    )
+                    if result.had_interactive_window:
+                        if result.window_closed:
+                            logger.info("Authentication dialog closed - continuing")
+                        else:
+                            logger.warning(
+                                "Authentication dialog did not close within timeout period. "
+                                "Manual intervention may be required."
+                            )
+        except (ImportError, Exception) as e:
+            # If psutil not available or monitoring fails, continue without monitoring
+            logger.debug(f"Window monitoring not available: {e}")
+    
+    # Run window monitoring in background thread
+    monitor_thread = threading.Thread(target=monitor_windows, daemon=True)
+    monitor_thread.start()
+    
+    # Wait for process to complete (with extended patience for interactive auth)
+    try:
+        process.wait(timeout=660)  # 11 minutes to allow monitor + buffer
+    except subprocess.TimeoutExpired:
+        logger.error("Recovery script timed out after 11 minutes")
+        process.kill()
+        return 1
+    
+    return process.returncode
 
 
 def build_runtime() -> Runtime:
