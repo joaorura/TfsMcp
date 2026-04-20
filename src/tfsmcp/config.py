@@ -18,6 +18,7 @@ class ServiceConfig:
     max_unauthorized_retries: int
     recovery_cooldown_seconds: int
     session_create_auto_get: bool
+    disable_pat_dialog: bool
 
 
 def _to_bool(value: str | None, default: bool) -> bool:
@@ -48,4 +49,5 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
         max_unauthorized_retries=int(env.get("TFSMCP_MAX_RETRIES", "1")),
         recovery_cooldown_seconds=int(env.get("TFSMCP_RECOVERY_COOLDOWN", "120")),
         session_create_auto_get=_to_bool(env.get("TFSMCP_SESSION_CREATE_AUTO_GET"), False),
+        disable_pat_dialog=_to_bool(env.get("TFSMCP_DISABLE_PAT_DIALOG"), False),
     )

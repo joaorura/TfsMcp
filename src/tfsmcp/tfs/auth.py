@@ -2,15 +2,20 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 
-def request_new_pat(current_pat: str | None = None, reason: str | None = None) -> str | None:
+def request_auth_credentials(
+    current_user: str | None = None,
+    current_pat: str | None = None,
+    reason: str | None = None
+) -> tuple[str | None, str | None]:
     """
-    Shows a GUI dialog to request a new Personal Access Token (PAT).
-    Returns the new PAT or None if cancelled.
+    Shows a GUI dialog to request TFS credentials (Username and PAT).
+    Returns (user, pat) or (None, None) if cancelled.
+    Returns ("SKIP", "SKIP") if the user marks they don't want to use PAT.
     """
     root = tk.Tk()
-    root.title("TFS PAT Required")
+    root.title("TFS Authentication Required")
     root.attributes("-topmost", True)
-    root.geometry("400x200")
+    root.geometry("450x320")
     
     # Center window
     root.update_idletasks()
@@ -20,27 +25,71 @@ def request_new_pat(current_pat: str | None = None, reason: str | None = None) -
     y = (root.winfo_screenheight() // 2) - (height // 2)
     root.geometry(f'{width}x{height}+{x}+{y}')
 
-    new_pat = tk.StringVar()
-    if current_pat:
-        new_pat.set(current_pat)
+    user_var = tk.StringVar(value=current_user or "PAT")
+    pat_var = tk.StringVar(value=current_pat or "")
+    skip_pat_var = tk.BooleanVar(value=False)
 
-    label_text = "Seu PAT do TFS expirou ou é inválido.\nPor favor, insira um novo PAT para continuar."
+    label_text = "As credenciais do TFS são necessárias.\nPor favor, insira seu PAT ou marque para não usar."
     if reason:
-        label_text = f"Erro de Autenticação: {reason}\n\n{label_text}"
+        # Truncate reason if too long
+        display_reason = str(reason)[:200] + "..." if len(str(reason)) > 200 else str(reason)
+        label_text = f"Status Atual:\n{display_reason}\n\n{label_text}"
 
-    ttk.Label(root, text=label_text, wraplength=350, justify="center").pack(pady=10)
+    ttk.Label(root, text=label_text, wraplength=400, justify="center").pack(pady=10)
     
-    entry = ttk.Entry(root, textvariable=new_pat, width=50, show="*")
-    entry.pack(pady=5, padx=20)
-    entry.focus_set()
+    form_frame = ttk.Frame(root)
+    form_frame.pack(pady=5, padx=20, fill="x")
 
-    result = {"pat": None}
+    # User field
+    user_label = ttk.Label(form_frame, text="Usuário (use 'PAT' para tokens do Azure DevOps):")
+    user_label.pack(anchor="w")
+    user_entry = ttk.Entry(form_frame, textvariable=user_var, width=50)
+    user_entry.pack(pady=(0, 10), fill="x")
+
+    # PAT field
+    pat_label = ttk.Label(form_frame, text="Personal Access Token (PAT):")
+    pat_label.pack(anchor="w")
+    pat_entry = ttk.Entry(form_frame, textvariable=pat_var, width=50, show="*")
+    pat_entry.pack(fill="x")
+
+    def toggle_fields():
+        state = "disabled" if skip_pat_var.get() else "normal"
+        user_entry.config(state=state)
+        pat_entry.config(state=state)
+        user_label.config(state=state)
+        pat_label.config(state=state)
+
+    # Skip Checkbox
+    ttk.Checkbutton(
+        root, 
+        text="Não usar PAT (usar apenas login via Scripts/Windows)", 
+        variable=skip_pat_var,
+        command=toggle_fields
+    ).pack(pady=10)
+    
+    if not current_pat:
+        pat_entry.focus_set()
+    else:
+        user_entry.focus_set()
+
+    result = {"user": None, "pat": None}
 
     def on_ok():
-        pat = new_pat.get().strip()
+        if skip_pat_var.get():
+            result["user"] = "SKIP"
+            result["pat"] = "SKIP"
+            root.destroy()
+            return
+
+        user = user_var.get().strip()
+        pat = pat_var.get().strip()
+        if not user:
+            messagebox.showwarning("Aviso", "O usuário não pode estar vazio.")
+            return
         if not pat:
             messagebox.showwarning("Aviso", "O PAT não pode estar vazio.")
             return
+        result["user"] = user
         result["pat"] = pat
         root.destroy()
 
@@ -54,13 +103,30 @@ def request_new_pat(current_pat: str | None = None, reason: str | None = None) -
     ttk.Button(btn_frame, text="Cancelar", command=on_cancel).pack(side="left", padx=5)
 
     root.mainloop()
-    return result["pat"]
+    return result["user"], result["pat"]
+
+
+def request_new_pat(current_pat: str | None = None, reason: str | None = None) -> str | None:
+    """
+    Backward compatibility for requesting only PAT.
+    """
+    _, pat = request_auth_credentials(current_user=None, current_pat=current_pat, reason=reason)
+    return pat
 
 
 def is_pat_valid(runner) -> bool:
     """
-    Checks if the current PAT in the runner is valid by executing a simple command.
+    Checks if the current PAT in the runner is valid.
+    In mandatory mode, if no PAT is present, it's considered invalid to force the dialog.
     """
+    current_pat = getattr(runner, "_tfs_pat", None)
+    if not current_pat:
+        return False
+        
     # Try a very lightweight command that requires authentication
     result = runner.run(["workspaces", "/noprompt", "/owner:*"])
-    return result.exit_code == 0
+    
+    from tfsmcp.tfs.classifier import TfOutputClassifier
+    classifier = TfOutputClassifier()
+    category = classifier.classify(result)
+    return category != "unauthorized"

@@ -206,7 +206,8 @@ function Start-TfsMcpBackgroundProcess {
         [Parameter(Mandatory)]
         [string]$EnvironmentName,
         [Parameter(Mandatory)]
-        [string]$ProjectRoot
+        [string]$ProjectRoot,
+        [bool]$DisablePatDialog = $false
     )
 
     $existing = Get-TfsMcpBackgroundProcess
@@ -233,6 +234,10 @@ function Start-TfsMcpBackgroundProcess {
         "-EnvironmentName",
         $EnvironmentName
     )
+
+    if ($DisablePatDialog) {
+        $env:TFSMCP_DISABLE_PAT_DIALOG = "true"
+    }
 
     $proc = Start-Process -FilePath $pwshPath -ArgumentList $arguments -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden
     Set-Content -Path $paths.PidFile -Value $proc.Id -Encoding ascii
@@ -277,7 +282,8 @@ function Enable-TfsMcpStartupShortcut {
         [Parameter(Mandatory)]
         [string]$EnvironmentName,
         [Parameter(Mandatory)]
-        [string]$ProjectRoot
+        [string]$ProjectRoot,
+        [bool]$DisablePatDialog = $false
     )
 
     $paths = Get-TfsMcpBackgroundPaths
@@ -287,10 +293,18 @@ function Enable-TfsMcpStartupShortcut {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($paths.StartupShortcut)
     $shortcut.TargetPath = $pwshPath
-    $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$backgroundScript`" -EnvironmentName `"$EnvironmentName`""
+    
+    $args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$backgroundScript`" -EnvironmentName `"$EnvironmentName`""
+    if ($DisablePatDialog) {
+        $args += " -DisablePatDialog"
+        $shortcut.Description = "Start TfsMcp in background (No PAT Dialog)"
+    } else {
+        $shortcut.Description = "Start TfsMcp in background"
+    }
+    
+    $shortcut.Arguments = $args
     $shortcut.WorkingDirectory = $ProjectRoot
     $shortcut.WindowStyle = 7
-    $shortcut.Description = "Start TfsMcp in background"
     $shortcut.Save()
 
     Write-Host "Startup shortcut created at '$($paths.StartupShortcut)'."

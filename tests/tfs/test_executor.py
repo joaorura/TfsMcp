@@ -54,6 +54,19 @@ def test_classifier_marks_tf30063_as_unauthorized():
     assert classifier.classify(result) == "unauthorized"
 
 
+def test_classifier_marks_permission_denied_as_unauthorized():
+    classifier = TfOutputClassifier()
+    result = CommandResult(
+        command=["tf"],
+        exit_code=1,
+        stdout="",
+        stderr="The item $/SPF/SLN could not be found in your workspace, or you do not have permission to access it.",
+        category="raw",
+    )
+
+    assert classifier.classify(result) == "unauthorized"
+
+
 def test_classifier_does_not_mark_access_denied_as_unauthorized():
     classifier = TfOutputClassifier()
     result = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Access is denied", category="raw")
@@ -246,3 +259,78 @@ def test_executor_does_not_recover_unknown_100_for_workfold_detection(tmp_path):
     assert result.recovery_scripts == []
     assert executed == []
     assert runner.calls == 1
+
+
+def test_executor_handles_pat_recovery_with_user_and_token(tmp_path):
+    from unittest.mock import MagicMock, patch
+    
+    mock_runner = MagicMock()
+    mock_runner._tfs_pat = "old-pat"
+    mock_runner._tfs_user = "old-user"
+    
+    # First call fails with unauthorized, second succeeds
+    mock_runner.run.side_effect = [
+        CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063", category="raw"),
+        CommandResult(command=["tf"], exit_code=0, stdout="ok", stderr="", category="raw"),
+    ]
+    
+    classifier = TfOutputClassifier()
+    # Mock is_pat_valid to return False first then True (or just mock it to return False)
+    # Actually, we need to mock request_auth_credentials
+    
+    with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
+         patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
+        
+        mock_auth.return_value = ("new-user", "new-pat")
+        
+        executor = RetryingTfsExecutor(mock_runner, classifier, None, max_retries=1)
+        result = executor.run(["checkout"])
+        
+        assert result.exit_code == 0
+        assert mock_runner.set_auth.called
+        mock_runner.set_auth.assert_called_with("new-user", "new-pat")
+        assert result.recovery_triggered is True
+
+
+def test_executor_skips_pat_dialog_if_configured(tmp_path):
+    from unittest.mock import MagicMock, patch
+    
+    mock_runner = MagicMock()
+    # First call fails with unauthorized
+    mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063", category="raw")
+    
+    classifier = TfOutputClassifier()
+    # No scripts to run
+    recovery = UnauthorizedRecoveryManager(tmp_path, lambda script: 0)
+    
+    with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth:
+        # max_retries=0 to avoid infinite recovery script loop if any were present
+        executor = RetryingTfsExecutor(mock_runner, classifier, recovery, max_retries=0, disable_pat_dialog=True)
+        result = executor.run(["checkout"])
+        
+        assert result.category == "unauthorized"
+        assert not mock_auth.called
+        assert not mock_runner.set_auth.called
+
+
+def test_executor_forces_dialog_if_pat_missing_and_command_fails(tmp_path):
+    from unittest.mock import MagicMock, patch
+    
+    mock_runner = MagicMock()
+    # No PAT configured
+    mock_runner._tfs_pat = None
+    # Command fails with any error (not necessarily unauthorized)
+    mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Any error", category="raw")
+    
+    classifier = TfOutputClassifier()
+    
+    with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
+         patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
+        
+        mock_auth.return_value = ("new-user", "new-pat")
+        
+        executor = RetryingTfsExecutor(mock_runner, classifier, None, max_retries=1)
+        # Even if category is 'unknown_failure' (not success), it should force dialog because PAT is missing
+        executor.run(["checkout"])
+        
+        assert mock_auth.called

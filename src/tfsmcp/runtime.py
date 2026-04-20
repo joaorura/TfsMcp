@@ -200,7 +200,13 @@ def build_runtime() -> Runtime:
         run_recovery_script,
         cooldown_seconds=config.recovery_cooldown_seconds,
     )
-    executor = RetryingTfsExecutor(runner, classifier, recovery, max_retries=config.max_unauthorized_retries)
+    executor = RetryingTfsExecutor(
+        runner, 
+        classifier, 
+        recovery, 
+        max_retries=config.max_unauthorized_retries,
+        disable_pat_dialog=config.disable_pat_dialog
+    )
     detector = TfsProjectDetector(executor)
     onboarding = TfsProjectOnboardingAdvisor(detector)
     sessions = SessionManager(

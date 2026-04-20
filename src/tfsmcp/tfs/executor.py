@@ -1,32 +1,46 @@
 from collections.abc import Sequence
 
 from tfsmcp.contracts import CommandResult
-from tfsmcp.tfs.auth import is_pat_valid, request_new_pat
+from tfsmcp.tfs.auth import is_pat_valid, request_auth_credentials
 
 
 class RetryingTfsExecutor:
-    def __init__(self, runner, classifier, recovery_manager, max_retries: int) -> None:
+    def __init__(self, runner, classifier, recovery_manager, max_retries: int, disable_pat_dialog: bool = False) -> None:
         self._runner = runner
         self._classifier = classifier
         self._recovery_manager = recovery_manager
         self._max_retries = max(0, max_retries)
+        self._disable_pat_dialog = disable_pat_dialog
 
     def run(self, args: Sequence[str]) -> CommandResult:
         result = self._runner.run(args)
         result.category = self._classifier.classify(result)
 
         # 1. Tentar recuperação via PAT se houver erro de autorização
-        # Apenas se o runner tiver suporte a PAT (verificamos atributo _tfs_pat)
-        if result.category == "unauthorized" and hasattr(self._runner, "_tfs_pat"):
-            # Verificar se o PAT atual é inválido (evita loop se o runner for um mock simples sem set_auth)
-            if hasattr(self._runner, "set_auth") and not is_pat_valid(self._runner):
+        # Apenas se o runner tiver suporte a autenticação (verificamos método set_auth)
+        if result.category != "success" and hasattr(self._runner, "set_auth") and not self._disable_pat_dialog:
+            # Verificar se o PAT atual é inválido ou se não temos um PAT (força solicitação se não houver PAT)
+            if not is_pat_valid(self._runner):
+                current_user = getattr(self._runner, "_tfs_user", None)
                 current_pat = getattr(self._runner, "_tfs_pat", None)
                 reason = result.stderr or result.stdout
-                new_pat = request_new_pat(current_pat=current_pat, reason=reason)
+                new_user, new_pat = request_auth_credentials(
+                    current_user=current_user, 
+                    current_pat=current_pat, 
+                    reason=reason
+                )
                 
+                if new_user == "SKIP":
+                    # Usuário marcou para não usar PAT. Salvar preferência em memória.
+                    self._disable_pat_dialog = True
+                    # Tentar rodar o comando original uma vez sem o login (pode ser que scripts resolvam)
+                    # mas se o comando falhou antes sem login, ele vai falhar de novo.
+                    # Retornamos o resultado original para seguir para os scripts legados.
+                    return result
+
                 if new_pat:
                     # Atualizar runner e tentar novamente
-                    self._runner.set_auth(getattr(self._runner, "_tfs_user", None), new_pat)
+                    self._runner.set_auth(new_user, new_pat)
                     result = self._runner.run(args)
                     result.category = self._classifier.classify(result)
                     result.recovery_triggered = True

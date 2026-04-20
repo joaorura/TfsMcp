@@ -1,10 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$EnvironmentName = "mcp_tfs_env"
+    [string]$EnvironmentName = "mcp_tfs_env",
+    [switch]$DisablePatDialog
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ($DisablePatDialog) {
+    $env:TFSMCP_DISABLE_PAT_DIALOG = "true"
+}
 
 $modulePath = Join-Path $PSScriptRoot "TfsMcp.PowerShell.psm1"
 Import-Module $modulePath -Force -DisableNameChecking

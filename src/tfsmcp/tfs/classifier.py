@@ -11,6 +11,9 @@ class TfOutputClassifier:
             "not authorized to access",
             "você não está autorizado a acessar",
             "voce nao esta autorizado a acessar",
+            "do not have permission to access",
+            "não tem permissão para acessar",
+            "nao tem permissao para acessar",
         ]
         if any(token in text for token in unauthorized_tokens):
             return "unauthorized"

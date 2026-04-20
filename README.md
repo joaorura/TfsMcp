@@ -114,9 +114,17 @@ python -m tfsmcp.service stop
 python -m tfsmcp.service uninstall
 ```
 
-## Unauthorized recovery
+## Unauthorized recovery and PAT Management
 
-If a TFS command returns an unauthorized error, the service runs every `*.ps1` script inside `C:\tfs_scripts` in alphabetical order and retries the original command once.
+If a TFS command returns an unauthorized error, the service follows two recovery paths:
+
+1. **GUI Dialog (PAT/User)**: If the runner has a PAT configured (via `TFSMCP_TFS_PAT`), the service shows an interactive GUI dialog asking for both **Username** and **PAT**. 
+   - Use `PAT` as the username for Azure DevOps Services tokens.
+   - For on-premise TFS, enter your actual username and token.
+   - The original command is retried once with the new credentials.
+2. **Legacy Scripts**: If the above is skipped or fails, the service runs every `*.ps1` script inside `C:\tfs_scripts` in alphabetical order and retries the original command once.
+
+*Note: GUI dialogs and interactive scripts only work when running in user background mode, not as a Windows Service.*
 
 ## Agent workflow
 
