@@ -82,8 +82,8 @@ function Test-CondaEnvironment {
     }
 
     $jsonText = $rawText.Substring($jsonStartIndex)
-        $result = $jsonText | ConvertFrom-Json -AsHashtable
-        foreach ($prefix in $result["envs"]) {
+    $result = $jsonText | ConvertFrom-Json
+    foreach ($prefix in $result.envs) {
         if ((Split-Path -Path $prefix -Leaf) -ieq $EnvironmentName) {
             return $true
         }

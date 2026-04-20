@@ -191,6 +191,8 @@ def build_runtime() -> Runtime:
         # Using a mapped local folder here can make `tf workspace /new`
         # fail with "path already mapped" against unrelated workspaces.
         working_directory=None,
+        tfs_user=config.tfs_user,
+        tfs_pat=config.tfs_pat,
     )
     classifier = TfOutputClassifier()
     recovery = UnauthorizedRecoveryManager(

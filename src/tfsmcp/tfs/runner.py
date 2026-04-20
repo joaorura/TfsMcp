@@ -5,13 +5,31 @@ from tfsmcp.contracts import CommandResult
 
 
 class TfCommandRunner:
-    def __init__(self, tf_path: str, timeout_seconds: int, working_directory: str | None = None) -> None:
+    def __init__(
+        self,
+        tf_path: str,
+        timeout_seconds: int,
+        working_directory: str | None = None,
+        tfs_user: str | None = None,
+        tfs_pat: str | None = None,
+    ) -> None:
         self._tf_path = tf_path
         self._timeout_seconds = timeout_seconds
         self._working_directory = working_directory
+        self._tfs_user = tfs_user
+        self._tfs_pat = tfs_pat
+
+    def set_auth(self, tfs_user: str | None, tfs_pat: str | None) -> None:
+        self._tfs_user = tfs_user
+        self._tfs_pat = tfs_pat
 
     def run(self, args: Sequence[str]) -> CommandResult:
-        command = [self._tf_path, *args]
+        full_args = list(args)
+        if self._tfs_pat:
+            user = self._tfs_user or "PAT"
+            full_args.append(f"/login:{user},{self._tfs_pat}")
+
+        command = [self._tf_path, *full_args]
         try:
             result = subprocess.run(
                 command,

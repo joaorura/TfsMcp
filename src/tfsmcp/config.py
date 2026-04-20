@@ -10,6 +10,8 @@ class ServiceConfig:
     http_port: int
     tf_path: str | None
     tfs_scripts_path: Path
+    tfs_user: str | None
+    tfs_pat: str | None
     session_base_dir: Path
     state_dir: Path
     command_timeout_seconds: int
@@ -38,6 +40,8 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
         http_port=int(env.get("TFSMCP_HTTP_PORT", "39393")),
         tf_path=env.get("TFSMCP_TF_PATH") or None,
         tfs_scripts_path=Path(env.get("TFSMCP_SCRIPTS_DIR", "C:/tfs_scripts")),
+        tfs_user=env.get("TFSMCP_TFS_USER") or None,
+        tfs_pat=env.get("TFSMCP_TFS_PAT") or None,
         session_base_dir=Path(env.get("TFSMCP_SESSION_DIR", "D:/TFS/.tfs-sessions")),
         state_dir=state_dir,
         command_timeout_seconds=int(env.get("TFSMCP_TIMEOUT", "120")),
