@@ -27,7 +27,7 @@ class FakeWorkspaceActions:
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
         self.resumed.append((workspace_name, session_path))
 
-    def promote_workspace(self, workspace_name: str, comment: str | None) -> str:
+    def promote_workspace(self, workspace_name: str, comment: str | None, session_path: str | None = None) -> str:
         self.promoted.append((workspace_name, comment))
         return comment or workspace_name
 

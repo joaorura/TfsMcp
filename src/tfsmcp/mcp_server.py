@@ -83,10 +83,23 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
         return runtime.executor.run(args)
 
     def tfs_unshelve(name: str, workspace: str | None = None):
-        args = ["unshelve", name]
+        args = ["unshelve", name, "/noprompt"]
         if workspace:
-            args.append(f"/workspace:{workspace}")
-        args.append("/noprompt")
+            session_path = None
+            for record in runtime.sessions.list_records():
+                ws = record.get("workspace_name") if isinstance(record, dict) else getattr(record, "workspace_name", None)
+                if ws == workspace:
+                    session_path = record.get("session_path") if isinstance(record, dict) else getattr(record, "session_path", None)
+                    break
+            if session_path:
+                runner = getattr(runtime.executor, "_runner", None)
+                if runner is not None and hasattr(runner, "_working_directory"):
+                    original_cwd = getattr(runner, "_working_directory", None)
+                    runner._working_directory = session_path
+                    try:
+                        return runtime.executor.run(args)
+                    finally:
+                        runner._working_directory = original_cwd
         return runtime.executor.run(args)
 
     def tfs_session_create_from_path(name: str, source_path: str, session_path: str, perform_get: bool = False):

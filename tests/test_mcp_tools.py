@@ -104,7 +104,6 @@ def test_handlers_delegate_to_runtime_dependencies():
     assert handlers["tfs_unshelve"]("rqf-29", workspace="agent-auth")["command"] == [
         "unshelve",
         "rqf-29",
-        "/workspace:agent-auth",
         "/noprompt",
     ]
 
@@ -127,6 +126,7 @@ def test_handlers_delegate_to_runtime_dependencies():
         "sessions": [{"name": "agent-auth", "sessionPath": "D:/TFS/agents/auth"}]
     }
     assert sessions.calls == [
+        ("list_records",),
         ("create", "agent-auth", "D:/TFS/SPF", "D:/TFS/agents/auth", False),
         ("create", "agent-auth-2", "$/SPF/Main", "D:/TFS/agents/auth-2", False),
         ("list_records",),

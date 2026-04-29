@@ -62,7 +62,20 @@ class RuntimeSessionActions:
             )
         )
         self._run_workspace_create(name, session_path)
-        self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
+        try:
+            self._run_or_raise(["workfold", "/map", server_path, session_path, f"/workspace:{name}", "/noprompt"])
+        except RuntimeError as exc:
+            error_text = str(exc).lower()
+            if any(kw in error_text for kw in ("already in use", "tf10125", "overlap", "já está em uso", "ja esta em uso")):
+                try:
+                    self._executor.run(["workspace", "/delete", name, "/noprompt"])
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"session_path '{session_path}' is already mapped to an existing TFS workspace. "
+                    "Provide a session_path that is outside any existing workspace mapping."
+                ) from exc
+            raise
         materialize = self._default_materialize_on_create if perform_get is None else perform_get
         if materialize:
             self.materialize_workspace(session_path)
@@ -83,9 +96,20 @@ class RuntimeSessionActions:
         _ = workspace_name
         self._run_or_raise(["get", session_path, "/recursive", "/noprompt"])
 
-    def promote_workspace(self, workspace_name: str, comment: str | None) -> str:
+    def promote_workspace(self, workspace_name: str, comment: str | None, session_path: str | None = None) -> str:
         final_comment = comment or workspace_name
-        self._run_or_raise(["checkin", f"/comment:{final_comment}", f"/workspace:{workspace_name}", "/noprompt"])
+        args = ["checkin", f"/comment:{final_comment}", "/noprompt"]
+        if session_path:
+            runner = getattr(self._executor, "_runner", None)
+            if runner is not None and hasattr(runner, "_working_directory"):
+                original_cwd = getattr(runner, "_working_directory", None)
+                runner._working_directory = session_path
+                try:
+                    self._run_or_raise(args)
+                finally:
+                    runner._working_directory = original_cwd
+                return final_comment
+        self._run_or_raise(args)
         return final_comment
 
 

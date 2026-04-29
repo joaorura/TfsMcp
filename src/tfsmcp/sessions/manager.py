@@ -80,7 +80,7 @@ class SessionManager:
             if record.name == name:
                 if record.status != "active":
                     raise ValueError(record.status)
-                record.last_shelveset = self._actions.promote_workspace(record.workspace_name, comment)
+                record.last_shelveset = self._actions.promote_workspace(record.workspace_name, comment, record.session_path)
                 record.status = "promoted"
                 self._store.save_all(records)
                 return record
