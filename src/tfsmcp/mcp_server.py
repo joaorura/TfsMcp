@@ -267,7 +267,7 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
         return runtime.executor.run(args)
 
     def tfs_diff(path: str, recursive: bool = False, workspace: str | None = None):
-        args = ["diff", path]
+        args = ["diff", path, "/format:unified", "/noprompt"]
         if recursive:
             args.append("/recursive")
         if workspace:
