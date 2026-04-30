@@ -89,8 +89,13 @@ class RuntimeSessionActions:
         self._run_or_raise(["shelve", workspace_name, "/noprompt"])
         return workspace_name
 
-    def remove_workspace(self, workspace_name: str) -> None:
+    def remove_workspace(self, workspace_name: str, session_path: str | None = None) -> None:
         self._run_or_raise(["workspace", "/delete", workspace_name, "/noprompt"])
+        if session_path:
+            import shutil
+            folder = Path(session_path)
+            if folder.exists():
+                shutil.rmtree(folder, ignore_errors=True)
 
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
         _ = workspace_name

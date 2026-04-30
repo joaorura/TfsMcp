@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$EnvironmentName = "mcp_tfs_env",
-    [string]$PythonVersion = "3.12",
+    [string]$PythonVersion = "3.14",
     [bool]$InstallDevDependencies = $true,
     [switch]$StartBackgroundNow,
     [switch]$DisablePatDialog,

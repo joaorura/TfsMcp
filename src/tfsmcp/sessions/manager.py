@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 
 from tfsmcp.contracts import SessionRecord
@@ -57,10 +56,7 @@ class SessionManager:
         records = self._store.load_all()
         for record in records:
             if record.name == name:
-                self._actions.remove_workspace(record.workspace_name)
-                session_folder = Path(record.session_path)
-                if session_folder.exists():
-                    shutil.rmtree(session_folder, ignore_errors=True)
+                self._actions.remove_workspace(record.workspace_name, record.session_path)
                 record.status = "discarded"
                 self._store.save_all(records)
                 return record

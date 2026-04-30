@@ -80,6 +80,32 @@ def test_runtime_session_actions_uses_executor_for_create_suspend_discard(tmp_pa
     ]
 
 
+def test_runtime_session_actions_remove_workspace_deletes_local_folder(tmp_path):
+    session_folder = tmp_path / "agent-auth"
+    session_folder.mkdir()
+    (session_folder / "leftover.txt").write_text("trash")
+
+    executor = FakeWorkspaceExecutor()
+    actions = RuntimeSessionActions(executor)
+
+    actions.remove_workspace("agent-auth", str(session_folder))
+
+    assert not session_folder.exists()
+    assert executor.commands == [["workspace", "/delete", "agent-auth", "/noprompt"]]
+
+
+def test_runtime_session_actions_remove_workspace_without_path_skips_folder_deletion(tmp_path):
+    session_folder = tmp_path / "agent-auth"
+    session_folder.mkdir()
+
+    executor = FakeWorkspaceExecutor()
+    actions = RuntimeSessionActions(executor)
+
+    actions.remove_workspace("agent-auth")
+
+    assert session_folder.exists()  # folder untouched when session_path not provided
+
+
 def test_runtime_session_actions_raises_when_tf_command_fails(tmp_path):
     executor = FailingWorkspaceExecutor()
     actions = RuntimeSessionActions(executor)

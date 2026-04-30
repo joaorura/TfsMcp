@@ -21,7 +21,7 @@ class FakeWorkspaceActions:
         self.shelvesets.append(workspace_name)
         return workspace_name
 
-    def remove_workspace(self, workspace_name: str) -> None:
+    def remove_workspace(self, workspace_name: str, session_path: str | None = None) -> None:
         self.removed.append(workspace_name)
 
     def resume_workspace(self, workspace_name: str, session_path: str) -> None:
@@ -139,14 +139,20 @@ def test_session_resume_uses_persisted_record_identity(tmp_path):
     assert actions.resumed == [("persisted-workspace", str(tmp_path / "persisted-session"))]
 
 
-def test_session_discard_removes_local_folder(tmp_path):
+def test_session_discard_delegates_session_path_to_remove_workspace(tmp_path):
     session_folder = tmp_path / "agent-auth"
     session_folder.mkdir()
     (session_folder / "some_file.txt").write_text("leftover")
 
     store = SessionStore(tmp_path / "sessions.json")
-    actions = FakeWorkspaceActions()
-    manager = SessionManager(store, actions)
+
+    removed_calls = []
+
+    class CapturingActions(FakeWorkspaceActions):
+        def remove_workspace(self, workspace_name: str, session_path: str | None = None) -> None:
+            removed_calls.append((workspace_name, session_path))
+
+    manager = SessionManager(store, CapturingActions())
     store.save_all(
         [
             SessionRecord(
@@ -163,7 +169,7 @@ def test_session_discard_removes_local_folder(tmp_path):
 
     manager.discard("agent-auth")
 
-    assert not session_folder.exists()
+    assert removed_calls == [("agent-auth", str(session_folder))]
 
 
 
