@@ -145,6 +145,8 @@ def test_handlers_delegate_to_runtime_dependencies():
     assert handlers["tfs_diff"]("D:/TFS/SPF", recursive=True)["command"] == [
         "diff",
         "D:/TFS/SPF",
+        "/format:unified",
+        "/noprompt",
         "/recursive",
     ]
 
