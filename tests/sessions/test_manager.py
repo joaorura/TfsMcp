@@ -139,6 +139,33 @@ def test_session_resume_uses_persisted_record_identity(tmp_path):
     assert actions.resumed == [("persisted-workspace", str(tmp_path / "persisted-session"))]
 
 
+def test_session_discard_removes_local_folder(tmp_path):
+    session_folder = tmp_path / "agent-auth"
+    session_folder.mkdir()
+    (session_folder / "some_file.txt").write_text("leftover")
+
+    store = SessionStore(tmp_path / "sessions.json")
+    actions = FakeWorkspaceActions()
+    manager = SessionManager(store, actions)
+    store.save_all(
+        [
+            SessionRecord(
+                name="agent-auth",
+                project_path="D:/TFS/SPF",
+                session_path=str(session_folder),
+                server_path="$/SPF/Main",
+                workspace_name="agent-auth",
+                mode="hybrid",
+                status="active",
+            )
+        ]
+    )
+
+    manager.discard("agent-auth")
+
+    assert not session_folder.exists()
+
+
 
 def test_session_resume_rejects_invalid_state(tmp_path):
     store = SessionStore(tmp_path / "sessions.json")
