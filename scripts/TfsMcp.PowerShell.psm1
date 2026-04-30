@@ -82,8 +82,8 @@ function Test-CondaEnvironment {
     }
 
     $jsonText = $rawText.Substring($jsonStartIndex)
-    $result = $jsonText | ConvertFrom-Json
-    foreach ($prefix in $result.envs) {
+    $result = $jsonText | ConvertFrom-Json -AsHashtable
+    foreach ($prefix in $result["envs"]) {
         if ((Split-Path -Path $prefix -Leaf) -ieq $EnvironmentName) {
             return $true
         }
@@ -221,9 +221,6 @@ function Start-TfsMcpBackgroundProcess {
         New-Item -ItemType Directory -Path $paths.StateDir -Force | Out-Null
     }
 
-    # Herdar configuração persistente se não foi passado explicitamente como argumento
-    $resolvedDisablePat = $DisablePatDialog -or ([System.Environment]::GetEnvironmentVariable("TFSMCP_DISABLE_PAT_DIALOG", "User") -eq "true")
-
     $pwshPath = (Get-Command -Name "pwsh").Source
     $backgroundScript = Join-Path $ProjectRoot "scripts\Run-TfsMcpBackground.ps1"
     $arguments = @(
@@ -238,8 +235,8 @@ function Start-TfsMcpBackgroundProcess {
         $EnvironmentName
     )
 
-    if ($resolvedDisablePat) {
-        $arguments += "-DisablePatDialog"
+    if ($DisablePatDialog) {
+        $env:TFSMCP_DISABLE_PAT_DIALOG = "true"
     }
 
     $proc = Start-Process -FilePath $pwshPath -ArgumentList $arguments -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden
@@ -296,9 +293,11 @@ function Enable-TfsMcpStartupShortcut {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($paths.StartupShortcut)
     $shortcut.TargetPath = $pwshPath
+    # Herdar configuracao persistente se nao foi passado explicitamente como argumento
+    $resolvedDisablePat = $DisablePatDialog -or ([System.Environment]::GetEnvironmentVariable("TFSMCP_DISABLE_PAT_DIALOG", "User") -eq "true")
     
     $args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$backgroundScript`" -EnvironmentName `"$EnvironmentName`""
-    if ($DisablePatDialog) {
+    if ($resolvedDisablePat) {
         $args += " -DisablePatDialog"
         $shortcut.Description = "Start TfsMcp in background (No PAT Dialog)"
     } else {

@@ -40,13 +40,19 @@ class RetryingTfsExecutor:
                             reason=reason
                         )
 
-                        if new_user == "SKIP" or new_user is None:
-                            # Usuário marcou SKIP ou cancelou — bloquear diálogo E scripts nesta sessão.
+                        if new_user is None:
+                            # Usuário cancelou o diálogo — bloquear diálogo E scripts nesta sessão.
                             self._disable_pat_dialog = True
                             self._user_opted_out_auth = True
                             return result
 
-                        if new_pat:
+                        if new_user == "SKIP":
+                            # Usuário marcou "Não usar PAT" — desabilitar apenas o diálogo PAT.
+                            # Os scripts de recuperação PS1 devem continuar sendo executados.
+                            self._disable_pat_dialog = True
+                            # Não retorna: deixa o fluxo cair para os scripts de recovery abaixo.
+
+                        if new_pat and new_user != "SKIP":
                             # Atualizar runner e tentar novamente
                             self._runner.set_auth(new_user, new_pat)
                             result = self._runner.run(args)

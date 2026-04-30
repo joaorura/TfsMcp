@@ -361,8 +361,8 @@ def test_executor_disables_dialog_and_skips_recovery_on_cancel(tmp_path):
         assert executed == []
 
 
-def test_executor_disables_dialog_and_skips_recovery_on_skip(tmp_path):
-    """SKIP no dialog deve desabilitar auth permanentemente e pular scripts de recuperação."""
+def test_executor_disables_dialog_but_runs_recovery_on_skip(tmp_path):
+    """SKIP no dialog deve desabilitar apenas o diálogo PAT; scripts de recuperação PS1 devem rodar."""
     from unittest.mock import MagicMock, patch
 
     mock_runner = MagicMock()
@@ -389,12 +389,13 @@ def test_executor_disables_dialog_and_skips_recovery_on_skip(tmp_path):
         result1 = executor.run(["checkout"])
         assert result1.category == "unauthorized"
         assert mock_auth.call_count == 1
-        assert executed == [], "Recovery scripts não devem rodar após SKIP"
+        assert executed == ["01-login.ps1"], "Recovery scripts devem rodar após SKIP (usuário quer PS1)"
 
         result2 = executor.run(["checkout"])
         assert result2.category == "unauthorized"
         assert mock_auth.call_count == 1, "Dialog não deve aparecer novamente após SKIP"
-        assert executed == []
+        # Cooldown ativo — scripts não reexecutam imediatamente
+        assert executed == ["01-login.ps1"]
 
 
 def test_executor_forces_dialog_if_pat_missing_and_command_fails(tmp_path):
