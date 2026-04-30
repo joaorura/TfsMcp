@@ -12,6 +12,9 @@ class RetryingTfsExecutor:
         self._recovery_manager = recovery_manager
         self._max_retries = max(0, max_retries)
         self._disable_pat_dialog = disable_pat_dialog
+        # Separar "diálogo PAT desabilitado por config" de "usuário optou por sair de toda auth na sessão".
+        # _user_opted_out_auth bloqueia tanto o diálogo PAT quanto os scripts de recuperação.
+        self._user_opted_out_auth = False
         self._auth_lock = threading.Lock()
 
     def run(self, args: Sequence[str]) -> CommandResult:
@@ -19,15 +22,15 @@ class RetryingTfsExecutor:
         result.category = self._classifier.classify(result)
 
         # 1. Tentar recuperação via PAT se houver erro de autorização
-        # Apenas se o runner tiver suporte a autenticação (verificamos método set_auth)
-        if result.category != "success" and hasattr(self._runner, "set_auth") and not self._disable_pat_dialog:
+        # Apenas se o runner tiver suporte a autenticação e o usuário não tiver optado por sair.
+        if result.category != "success" and hasattr(self._runner, "set_auth") and not self._disable_pat_dialog and not self._user_opted_out_auth:
             # Usar lock para garantir que somente um diálogo de autenticação apareça por vez.
             # Se outra thread já está tratando auth, pula este bloco sem tentar novamente.
             acquired = self._auth_lock.acquire(blocking=False)
             if acquired:
                 try:
-                    # Re-verificar o flag após adquirir o lock (outra thread pode ter desativado)
-                    if not self._disable_pat_dialog and not is_pat_valid(self._runner):
+                    # Re-verificar os flags após adquirir o lock (outra thread pode ter alterado)
+                    if not self._disable_pat_dialog and not self._user_opted_out_auth and not is_pat_valid(self._runner):
                         current_user = getattr(self._runner, "_tfs_user", None)
                         current_pat = getattr(self._runner, "_tfs_pat", None)
                         reason = result.stderr or result.stdout
@@ -38,8 +41,9 @@ class RetryingTfsExecutor:
                         )
 
                         if new_user == "SKIP" or new_user is None:
-                            # Usuário marcou SKIP ou cancelou — nunca mais perguntar nesta sessão
+                            # Usuário marcou SKIP ou cancelou — bloquear diálogo E scripts nesta sessão.
                             self._disable_pat_dialog = True
+                            self._user_opted_out_auth = True
                             return result
 
                         if new_pat:
@@ -55,9 +59,9 @@ class RetryingTfsExecutor:
                 finally:
                     self._auth_lock.release()
 
-        # 2. Se o usuário optou por não usar PAT/diálogos de auth, não executar scripts de recuperação
-        # (scripts legados também abrem janelas de login do tf.exe)
-        if self._disable_pat_dialog:
+        # 2. Se o usuário optou por sair de toda auth na sessão, não executar scripts de recuperação.
+        # Nota: _disable_pat_dialog vindo do config NÃO bloqueia os scripts — apenas o diálogo PAT.
+        if self._user_opted_out_auth:
             return result
 
         # 3. Fallback para scripts de recuperação legados
@@ -80,5 +84,10 @@ class RetryingTfsExecutor:
 
     @staticmethod
     def _should_try_recovery(args: Sequence[str], result: CommandResult) -> bool:
-        _ = args
-        return result.category == "unauthorized"
+        if result.category != "unauthorized":
+            return False
+        # Comandos de detecção/leitura passiva não devem consumir o cooldown de recovery.
+        # Apenas comandos de ação explícita do usuário ativam os scripts.
+        _PASSIVE_COMMANDS = {"workfold", "info", "workspaces", "properties"}
+        first_arg = args[0].lower() if args else ""
+        return first_arg not in _PASSIVE_COMMANDS

@@ -290,22 +290,36 @@ def test_executor_handles_pat_recovery_with_user_and_token(tmp_path):
         assert result.recovery_triggered is True
 
 
-def test_executor_skips_pat_dialog_if_configured(tmp_path):
+def test_executor_skips_pat_dialog_if_configured_but_still_runs_recovery(tmp_path):
+    """disable_pat_dialog=True (via config) deve pular o diálogo PAT mas ainda rodar recovery scripts."""
     from unittest.mock import MagicMock, patch
 
-    mock_runner = MagicMock()
-    mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063", category="raw")
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "01-login.ps1").write_text("Write-Host one", encoding="utf-8")
 
+    executed = []
+
+    class SequenceRunnerAuth:
+        def __init__(self):
+            self.calls = 0
+        def run(self, args):
+            self.calls += 1
+            if self.calls == 1:
+                return CommandResult(command=["tf", *args], exit_code=1, stdout="", stderr="TF30063: You are not authorized", category="raw")
+            return CommandResult(command=["tf", *args], exit_code=0, stdout="ok", stderr="", category="raw")
+
+    runner = SequenceRunnerAuth()
+    recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
     classifier = TfOutputClassifier()
-    recovery = UnauthorizedRecoveryManager(tmp_path, lambda script: 0)
 
     with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth:
-        executor = RetryingTfsExecutor(mock_runner, classifier, recovery, max_retries=0, disable_pat_dialog=True)
+        executor = RetryingTfsExecutor(runner, classifier, recovery, max_retries=1, disable_pat_dialog=True)
         result = executor.run(["checkout"])
 
-        assert result.category == "unauthorized"
-        assert not mock_auth.called
-        assert not mock_runner.set_auth.called
+        assert result.exit_code == 0
+        assert not mock_auth.called, "Diálogo PAT não deve aparecer quando disable_pat_dialog=True"
+        assert executed == ["01-login.ps1"], "Recovery scripts devem rodar mesmo com disable_pat_dialog=True"
 
 
 def test_executor_disables_dialog_and_skips_recovery_on_cancel(tmp_path):

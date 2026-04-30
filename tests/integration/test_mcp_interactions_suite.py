@@ -146,6 +146,6 @@ def test_simulated_tfs_worktree_lifecycle_roundtrip(tmp_path):
         ["workfold", "/map", "$/SPF/Main", str(session_path), "/workspace:agent-auth", "/noprompt"],
         ["shelve", "agent-auth", "/noprompt"],
         ["get", str(session_path), "/recursive", "/noprompt"],
-        ["checkin", "/comment:ship it", "/workspace:agent-auth", "/noprompt"],
+        ["checkin", "/comment:ship it", "/noprompt"],
         ["workspace", "/delete", "agent-auth", "/noprompt"],
     ]

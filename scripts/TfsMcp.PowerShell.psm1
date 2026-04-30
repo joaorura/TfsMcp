@@ -221,6 +221,9 @@ function Start-TfsMcpBackgroundProcess {
         New-Item -ItemType Directory -Path $paths.StateDir -Force | Out-Null
     }
 
+    # Herdar configuração persistente se não foi passado explicitamente como argumento
+    $resolvedDisablePat = $DisablePatDialog -or ([System.Environment]::GetEnvironmentVariable("TFSMCP_DISABLE_PAT_DIALOG", "User") -eq "true")
+
     $pwshPath = (Get-Command -Name "pwsh").Source
     $backgroundScript = Join-Path $ProjectRoot "scripts\Run-TfsMcpBackground.ps1"
     $arguments = @(
@@ -235,8 +238,8 @@ function Start-TfsMcpBackgroundProcess {
         $EnvironmentName
     )
 
-    if ($DisablePatDialog) {
-        $env:TFSMCP_DISABLE_PAT_DIALOG = "true"
+    if ($resolvedDisablePat) {
+        $arguments += "-DisablePatDialog"
     }
 
     $proc = Start-Process -FilePath $pwshPath -ArgumentList $arguments -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden

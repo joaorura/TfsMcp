@@ -15,6 +15,9 @@ class FakeRuntimeConfig:
         self.session_create_auto_get = False
         self.tfs_scripts_path = tmp_path / "scripts"
         self.state_dir = tmp_path / "state"
+        self.tfs_user = None
+        self.tfs_pat = None
+        self.disable_pat_dialog = False
         self.tfs_scripts_path.mkdir()
 
 
@@ -27,10 +30,12 @@ class FakeLocator:
 
 
 class FakeRunnerForRuntime:
-    def __init__(self, tf_path: str, timeout_seconds: int, working_directory: str | None = None) -> None:
+    def __init__(self, tf_path: str, timeout_seconds: int, working_directory: str | None = None, tfs_user: str | None = None, tfs_pat: str | None = None) -> None:
         self.tf_path = tf_path
         self.timeout_seconds = timeout_seconds
         self.working_directory = working_directory
+        self.tfs_user = tfs_user
+        self.tfs_pat = tfs_pat
 
     def run(self, args):
         raise AssertionError("runtime wiring test should not execute tf commands")
@@ -72,8 +77,15 @@ def test_build_runtime_wires_dependencies(tmp_path, monkeypatch):
     assert captured["scripts_dir"] == tmp_path / "scripts"
     assert captured["cooldown_seconds"] == 120
     assert callable(captured["run_script"])
-    monkeypatch.setattr("tfsmcp.runtime.subprocess.run", lambda command, check: types.SimpleNamespace(returncode=0))
-    assert captured["run_script"](tmp_path / "scripts" / "recover.ps1") == 0
+    from unittest.mock import patch, MagicMock
+
+    fake_proc = MagicMock()
+    fake_proc.pid = 99999
+    fake_proc.returncode = 0
+    fake_proc.wait.return_value = None
+
+    with patch("subprocess.Popen", return_value=fake_proc):
+        assert captured["run_script"](tmp_path / "scripts" / "recover.ps1") == 0
     assert captured["run_script"].__name__ == "run_recovery_script"
 
 
