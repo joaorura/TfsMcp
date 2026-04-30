@@ -263,29 +263,27 @@ def test_executor_does_not_recover_unknown_100_for_workfold_detection(tmp_path):
 
 def test_executor_handles_pat_recovery_with_user_and_token(tmp_path):
     from unittest.mock import MagicMock, patch
-    
+
     mock_runner = MagicMock()
     mock_runner._tfs_pat = "old-pat"
     mock_runner._tfs_user = "old-user"
-    
+
     # First call fails with unauthorized, second succeeds
     mock_runner.run.side_effect = [
         CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063", category="raw"),
         CommandResult(command=["tf"], exit_code=0, stdout="ok", stderr="", category="raw"),
     ]
-    
+
     classifier = TfOutputClassifier()
-    # Mock is_pat_valid to return False first then True (or just mock it to return False)
-    # Actually, we need to mock request_auth_credentials
-    
+
     with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
          patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
-        
+
         mock_auth.return_value = ("new-user", "new-pat")
-        
+
         executor = RetryingTfsExecutor(mock_runner, classifier, None, max_retries=1)
         result = executor.run(["checkout"])
-        
+
         assert result.exit_code == 0
         assert mock_runner.set_auth.called
         mock_runner.set_auth.assert_called_with("new-user", "new-pat")
@@ -294,43 +292,112 @@ def test_executor_handles_pat_recovery_with_user_and_token(tmp_path):
 
 def test_executor_skips_pat_dialog_if_configured(tmp_path):
     from unittest.mock import MagicMock, patch
-    
+
     mock_runner = MagicMock()
-    # First call fails with unauthorized
     mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="TF30063", category="raw")
-    
+
     classifier = TfOutputClassifier()
-    # No scripts to run
     recovery = UnauthorizedRecoveryManager(tmp_path, lambda script: 0)
-    
+
     with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth:
-        # max_retries=0 to avoid infinite recovery script loop if any were present
         executor = RetryingTfsExecutor(mock_runner, classifier, recovery, max_retries=0, disable_pat_dialog=True)
         result = executor.run(["checkout"])
-        
+
         assert result.category == "unauthorized"
         assert not mock_auth.called
         assert not mock_runner.set_auth.called
 
 
-def test_executor_forces_dialog_if_pat_missing_and_command_fails(tmp_path):
+def test_executor_disables_dialog_and_skips_recovery_on_cancel(tmp_path):
+    """Cancelling the PAT dialog (None, None) must disable auth permanently and skip recovery scripts."""
     from unittest.mock import MagicMock, patch
-    
+
     mock_runner = MagicMock()
-    # No PAT configured
     mock_runner._tfs_pat = None
-    # Command fails with any error (not necessarily unauthorized)
-    mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Any error", category="raw")
-    
+    mock_runner.run.return_value = CommandResult(
+        command=["tf"], exit_code=1, stdout="", stderr="TF30063: You are not authorized", category="raw"
+    )
+
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "01-login.ps1").write_text("Write-Host one", encoding="utf-8")
+
+    executed = []
+    recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
     classifier = TfOutputClassifier()
-    
+
     with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
          patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
-        
+
+        # Simular cancelamento: retorna (None, None)
+        mock_auth.return_value = (None, None)
+
+        executor = RetryingTfsExecutor(mock_runner, classifier, recovery, max_retries=1)
+
+        # Primeira chamada: mostra dialog, usuário cancela
+        result1 = executor.run(["checkout"])
+        assert result1.category == "unauthorized"
+        assert mock_auth.call_count == 1
+        assert executed == [], "Recovery scripts não devem rodar após cancelamento"
+
+        # Segunda chamada: não deve mostrar dialog nem rodar scripts
+        result2 = executor.run(["checkout"])
+        assert result2.category == "unauthorized"
+        assert mock_auth.call_count == 1, "Dialog não deve aparecer novamente após cancelamento"
+        assert executed == []
+
+
+def test_executor_disables_dialog_and_skips_recovery_on_skip(tmp_path):
+    """SKIP no dialog deve desabilitar auth permanentemente e pular scripts de recuperação."""
+    from unittest.mock import MagicMock, patch
+
+    mock_runner = MagicMock()
+    mock_runner._tfs_pat = None
+    mock_runner.run.return_value = CommandResult(
+        command=["tf"], exit_code=1, stdout="", stderr="TF30063: You are not authorized", category="raw"
+    )
+
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "01-login.ps1").write_text("Write-Host one", encoding="utf-8")
+
+    executed = []
+    recovery = UnauthorizedRecoveryManager(scripts_dir, lambda script: executed.append(script.name) or 0)
+    classifier = TfOutputClassifier()
+
+    with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
+         patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
+
+        mock_auth.return_value = ("SKIP", "SKIP")
+
+        executor = RetryingTfsExecutor(mock_runner, classifier, recovery, max_retries=1)
+
+        result1 = executor.run(["checkout"])
+        assert result1.category == "unauthorized"
+        assert mock_auth.call_count == 1
+        assert executed == [], "Recovery scripts não devem rodar após SKIP"
+
+        result2 = executor.run(["checkout"])
+        assert result2.category == "unauthorized"
+        assert mock_auth.call_count == 1, "Dialog não deve aparecer novamente após SKIP"
+        assert executed == []
+
+
+def test_executor_forces_dialog_if_pat_missing_and_command_fails(tmp_path):
+    from unittest.mock import MagicMock, patch
+
+    mock_runner = MagicMock()
+    mock_runner._tfs_pat = None
+    mock_runner.run.return_value = CommandResult(command=["tf"], exit_code=1, stdout="", stderr="Any error", category="raw")
+
+    classifier = TfOutputClassifier()
+
+    with patch("tfsmcp.tfs.executor.request_auth_credentials") as mock_auth, \
+         patch("tfsmcp.tfs.executor.is_pat_valid", return_value=False):
+
         mock_auth.return_value = ("new-user", "new-pat")
-        
+
         executor = RetryingTfsExecutor(mock_runner, classifier, None, max_retries=1)
-        # Even if category is 'unknown_failure' (not success), it should force dialog because PAT is missing
         executor.run(["checkout"])
-        
+
         assert mock_auth.called

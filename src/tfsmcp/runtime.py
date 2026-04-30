@@ -167,14 +167,15 @@ def run_recovery_script(script_path) -> int:
                         "Detected tf.exe process - monitoring for interactive authentication dialogs. "
                         "If a login window appears, please complete authentication."
                     )
-                    # Monitor this tf.exe process for interactive windows
-                    # Extended timeout (10 minutes) to allow user to complete authentication
+                    # Monitor this tf.exe process for interactive windows.
+                    # Wait up to 2 minutes for the user to complete authentication;
+                    # if not done by then, kill the process to prevent window accumulation.
                     result = monitor.monitor_process_windows(
                         pid=child.pid,
-                        timeout_seconds=600,
+                        timeout_seconds=120,
                         on_window_detected=lambda titles: logger.warning(
                             f"Interactive window detected: {titles}. "
-                            "Waiting for user to complete authentication..."
+                            "Waiting for user to complete authentication (2 min timeout)..."
                         ),
                     )
                     if result.had_interactive_window:
@@ -182,9 +183,13 @@ def run_recovery_script(script_path) -> int:
                             logger.info("Authentication dialog closed - continuing")
                         else:
                             logger.warning(
-                                "Authentication dialog did not close within timeout period. "
-                                "Manual intervention may be required."
+                                "Authentication dialog not closed within 2 minutes — "
+                                "killing tf.exe to prevent multiple login windows."
                             )
+                            try:
+                                child.kill()
+                            except Exception as kill_err:
+                                logger.debug(f"Failed to kill tf.exe: {kill_err}")
         except (ImportError, Exception) as e:
             # If psutil not available or monitoring fails, continue without monitoring
             logger.debug(f"Window monitoring not available: {e}")
@@ -193,11 +198,11 @@ def run_recovery_script(script_path) -> int:
     monitor_thread = threading.Thread(target=monitor_windows, daemon=True)
     monitor_thread.start()
     
-    # Wait for process to complete (with extended patience for interactive auth)
+    # Wait for process to complete (with buffer after 2-min window monitor)
     try:
-        process.wait(timeout=660)  # 11 minutes to allow monitor + buffer
+        process.wait(timeout=130)  # 120s monitor + 10s buffer
     except subprocess.TimeoutExpired:
-        logger.error("Recovery script timed out after 11 minutes")
+        logger.error("Recovery script timed out after 130 seconds")
         process.kill()
         return 1
     
