@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from mcp.server.fastmcp import FastMCP
 
+from tfsmcp.contracts import ProjectDetection
 from tfsmcp.runtime import Runtime
 
 
@@ -41,6 +42,27 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
             if record_name == name:
                 return record
         raise KeyError(name)
+
+    def _detect_with_session_fallback(path: str) -> ProjectDetection:
+        """Detect TFS mapping, falling back to session store when the local workspace
+        cache is stale (common with server workspaces created via tfs_session_create)."""
+        detection = runtime.detector.detect(path)
+        if _detection_field(detection, "kind") != "not_tfs":
+            return detection
+
+        # Normalise for case-insensitive prefix comparison on Windows.
+        normalised = path.lower().rstrip("\\")
+        for record in runtime.sessions.list_records():
+            sp = record.get("session_path") if isinstance(record, dict) else getattr(record, "session_path", None)
+            srv = record.get("server_path") if isinstance(record, dict) else getattr(record, "server_path", None)
+            ws = record.get("workspace_name") if isinstance(record, dict) else getattr(record, "workspace_name", None)
+            if not sp or not srv:
+                continue
+            sp_norm = sp.lower().rstrip("\\")
+            if normalised == sp_norm or normalised.startswith(sp_norm + "\\"):
+                return ProjectDetection("tfs_mapped", "high", ws, srv, path, True)
+
+        return detection
 
     def _materialize_session_path(session_path: str, workspace_name: str | None = None, recursive: bool = True):
         args = ["get", session_path]
@@ -253,8 +275,8 @@ def build_tool_handlers(runtime: Runtime) -> dict[str, object]:
         return runtime.executor.run(args)
 
     return {
-        "tfs_detect_project": lambda path: runtime.detector.detect(path),
-        "tfs_onboard_project": lambda path: runtime.onboarding.build(path),
+        "tfs_detect_project": lambda path: _detect_with_session_fallback(path),
+        "tfs_onboard_project": lambda path: runtime.onboarding.build(path, _detect_with_session_fallback(path)),
         "tfs_checkout": lambda filepath: runtime.executor.run(["checkout", filepath]),
         "tfs_add": tfs_add,
         "tfs_status": tfs_status,

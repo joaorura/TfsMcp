@@ -12,9 +12,11 @@ class TfsProjectDetector:
     def detect(self, path: str) -> ProjectDetection:
         candidate_path = os.path.dirname(path) if os.path.splitext(path)[1] else path
 
-        workspace_name, server_path, local_path = self._detect_from_workfold(candidate_path)
+        workspace_name, server_path, local_path, auth_error = self._detect_from_workfold(candidate_path)
         if server_path:
             return ProjectDetection("tfs_mapped", "high", workspace_name, server_path, local_path, True)
+        if auth_error:
+            return ProjectDetection("tfs_mapped", "medium", workspace_name, None, path, True)
 
         info_result = self._executor.run(["info", path])
         info_workspace_name, info_server_path, info_local_path = self._parse_detection_output(
@@ -30,10 +32,14 @@ class TfsProjectDetector:
                 info_local_path,
                 True,
             )
+        if getattr(info_result, "category", None) == "unauthorized":
+            return ProjectDetection("tfs_mapped", "medium", workspace_name, None, path, True)
 
         return ProjectDetection("not_tfs", "high", None, None, path, False)
 
-    def _detect_from_workfold(self, path: str) -> tuple[str | None, str | None, str]:
+    def _detect_from_workfold(self, path: str) -> tuple[str | None, str | None, str, bool]:
+        had_auth_error = False
+        workspace_name_from_auth = None
         for candidate_path in self._iter_candidate_paths(path):
             result = self._executor.run(["workfold", candidate_path])
             workspace_name, server_path, local_path = self._parse_detection_output(
@@ -41,8 +47,12 @@ class TfsProjectDetector:
                 fallback_local_path=candidate_path,
             )
             if result.exit_code == 0 and server_path:
-                return workspace_name, server_path, local_path
-        return None, None, path
+                return workspace_name, server_path, local_path, False
+            if getattr(result, "category", None) == "unauthorized":
+                had_auth_error = True
+                if workspace_name and not workspace_name_from_auth:
+                    workspace_name_from_auth = workspace_name
+        return workspace_name_from_auth, None, path, had_auth_error
 
     @staticmethod
     def _iter_candidate_paths(path: str):

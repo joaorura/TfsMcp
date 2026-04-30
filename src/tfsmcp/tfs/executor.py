@@ -92,8 +92,10 @@ class RetryingTfsExecutor:
     def _should_try_recovery(args: Sequence[str], result: CommandResult) -> bool:
         if result.category != "unauthorized":
             return False
-        # Comandos de detecção/leitura passiva não devem consumir o cooldown de recovery.
-        # Apenas comandos de ação explícita do usuário ativam os scripts.
-        _PASSIVE_COMMANDS = {"workfold", "info", "workspaces", "properties"}
+        # Comandos puramente de leitura de metadados de workspace não ativam scripts de recovery
+        # pois não são operações explícitas do usuário e não valem consumir o cooldown.
+        # workfold e info são exceção: são chamados por tfs_detect_project / tfs_onboard_project
+        # e precisam funcionar para que a autenticação seja resolvida.
+        _PASSIVE_COMMANDS = {"workspaces", "properties"}
         first_arg = args[0].lower() if args else ""
         return first_arg not in _PASSIVE_COMMANDS

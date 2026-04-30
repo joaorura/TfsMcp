@@ -22,7 +22,7 @@ class FakeOnboarding:
     def __init__(self):
         self.paths = []
 
-    def build(self, path: str):
+    def build(self, path: str, detection=None):
         self.paths.append(path)
         return {"projectKind": "tfs_mapped", "localPath": path}
 
@@ -168,6 +168,54 @@ def test_session_create_from_path_requires_mapped_path():
         assert False, "Expected RuntimeError"
     except RuntimeError as exc:
         assert "not TFS mapped" in str(exc)
+
+
+def test_detect_and_onboard_fall_back_to_session_store_when_not_tfs():
+    """When tf workfold returns not_tfs (stale server-workspace cache), detection
+    should resolve tfs_mapped from the session store instead."""
+
+    class NotMappedDetector:
+        def detect(self, path: str):
+            return {"kind": "not_tfs", "server_path": None, "workspace_name": None, "local_path": path}
+
+    from tfsmcp.tfs.onboarding import TfsProjectOnboardingAdvisor
+
+    detector = NotMappedDetector()
+    sessions = FakeSessions()
+    sessions.records = [
+        {
+            "name": "pgp-30745",
+            "session_path": "D:\\TFS_DevOps\\SPF\\develop-pgp-30745\\Fontes",
+            "server_path": "$/SPF/branches/develop-pgp-30745/Fontes",
+            "workspace_name": "pgp-30745",
+            "project_path": "$/SPF/branches/develop-pgp-30745/Fontes",
+            "mode": "hybrid",
+            "status": "active",
+        }
+    ]
+    runtime = Runtime(
+        config=None,
+        detector=detector,
+        onboarding=TfsProjectOnboardingAdvisor(detector),
+        executor=FakeExecutor(),
+        sessions=sessions,
+    )
+    handlers = build_tool_handlers(runtime)
+
+    # Exact session_path match
+    detect_result = handlers["tfs_detect_project"]("D:\\TFS_DevOps\\SPF\\develop-pgp-30745\\Fontes")
+    assert detect_result.kind == "tfs_mapped"
+    assert detect_result.server_path == "$/SPF/branches/develop-pgp-30745/Fontes"
+    assert detect_result.workspace_name == "pgp-30745"
+
+    # Subdirectory of session_path
+    detect_sub = handlers["tfs_detect_project"]("D:\\TFS_DevOps\\SPF\\develop-pgp-30745\\Fontes\\Toledo.SPF.Negocio")
+    assert detect_sub.kind == "tfs_mapped"
+
+    # Onboard also resolves correctly via the fallback
+    onboard_result = handlers["tfs_onboard_project"]("D:\\TFS_DevOps\\SPF\\develop-pgp-30745\\Fontes")
+    assert onboard_result.project_kind == "tfs_mapped"
+    assert onboard_result.supports["basicTools"] is True
 
 
 def test_session_validate_uses_named_record_path_and_workspace():
