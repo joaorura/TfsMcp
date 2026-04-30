@@ -262,6 +262,20 @@ function Stop-TfsMcpBackgroundProcess {
     return 0
 }
 
+function Restart-TfsMcpBackgroundProcess {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$EnvironmentName,
+        [Parameter(Mandatory)]
+        [string]$ProjectRoot,
+        [bool]$DisablePatDialog = $false
+    )
+
+    Stop-TfsMcpBackgroundProcess | Out-Null
+    return Start-TfsMcpBackgroundProcess -EnvironmentName $EnvironmentName -ProjectRoot $ProjectRoot -DisablePatDialog:$DisablePatDialog
+}
+
 function Get-TfsMcpBackgroundStatus {
     [CmdletBinding()]
     param()

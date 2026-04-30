@@ -5,6 +5,7 @@ param(
         "run",
         "background-start",
         "background-stop",
+        "background-restart",
         "background-status",
         "startup-enable",
         "startup-disable",
@@ -40,6 +41,9 @@ switch ($Command) {
     }
     "background-stop" {
         $exitCode = Stop-TfsMcpBackgroundProcess
+    }
+    "background-restart" {
+        $exitCode = Restart-TfsMcpBackgroundProcess -EnvironmentName $EnvironmentName -ProjectRoot $projectRoot
     }
     "background-status" {
         $exitCode = Get-TfsMcpBackgroundStatus
