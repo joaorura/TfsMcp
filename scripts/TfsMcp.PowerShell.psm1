@@ -368,6 +368,7 @@ Export-ModuleMember -Function @(
     "Invoke-TfsMcpServiceCommand",
     "Start-TfsMcpBackgroundProcess",
     "Stop-TfsMcpBackgroundProcess",
+    "Restart-TfsMcpBackgroundProcess",
     "Get-TfsMcpBackgroundStatus",
     "Enable-TfsMcpStartupShortcut",
     "Disable-TfsMcpStartupShortcut",
